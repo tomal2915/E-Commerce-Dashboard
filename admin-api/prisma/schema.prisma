@@ -1,0 +1,249 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // url      = env("DATABASE_URL")
+}
+
+// ================== USERS & ROLES ==================
+
+model User {
+  id            String         @id @default(uuid())
+  name          String
+  email         String         @unique
+  password      String
+  phone         String?
+  gender        String?
+  avatarId      String?
+  avatar        Media?         @relation("UserAvatar", fields: [avatarId], references: [id])
+  roleId        String
+  role          Role           @relation(fields: [roleId], references: [id])
+  isActive      Boolean        @default(true)
+  refreshTokens RefreshToken[]
+  uploadedMedia Media[]        @relation("UploadedMedia")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("users")
+}
+
+// Storing refresh tokens as their own table (better than a raw array/JSON column)
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  status      Boolean          @default(true)
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("roles")
+}
+
+// ================== PERMISSIONS ==================
+
+model PermissionGroup {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  description String?
+  permissions Permission[]
+
+  @@map("permission_groups")
+}
+
+model Permission {
+  id            String           @id @default(uuid())
+  name          String           @unique // e.g. "product:create"
+  description   String?
+  parentGroupId String?
+  parentGroup   PermissionGroup? @relation(fields: [parentGroupId], references: [id])
+  roles         RolePermission[]
+
+  @@map("permissions")
+}
+
+// Join table between Role and Permission (many-to-many)
+model RolePermission {
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ================== MEDIA ==================
+
+model Media {
+  id         String  @id @default(uuid())
+  fileName   String
+  storedPath String
+  publicUrl  String
+  mimeType   String
+  type       String // e.g. "image", "video", "document"
+  size       Int
+  width      Int?
+  height     Int?
+  thumbnail  String?
+  altText    String?
+  title      String?
+
+  uploadedById String?
+  uploadedBy   User?   @relation("UploadedMedia", fields: [uploadedById], references: [id])
+
+  usedAsAvatarBy User[]     @relation("UserAvatar")
+  categories     Category[] @relation("CategoryImage")
+  brands         Brand[]    @relation("BrandLogo")
+
+  createdAt DateTime @default(now())
+
+  @@map("media")
+}
+
+// ================== CATEGORY ==================
+
+model Category {
+  id          String  @id @default(uuid())
+  name        String
+  slug        String  @unique
+  description String?
+  imageId     String?
+  image       Media?  @relation("CategoryImage", fields: [imageId], references: [id])
+
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+
+  activeFlag Boolean @default(true)
+  sortOrder  Int     @default(0)
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("categories")
+}
+
+// ================== BRAND ==================
+
+model Brand {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  logoId      String?
+  logo        Media?    @relation("BrandLogo", fields: [logoId], references: [id])
+  status      Boolean   @default(true)
+  description String?
+  products    Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("brands")
+}
+
+// ================== ATTRIBUTES ==================
+
+// e.g. Attribute = "Color", "Size"
+model Attribute {
+  id     String           @id @default(uuid())
+  name   String           @unique
+  slug   String           @unique
+  type   String // e.g. "text", "color", "number"
+  values AttributeValue[]
+
+  @@map("attributes")
+}
+
+// e.g. AttributeValue = "Red", "Blue" (belongs to "Color")
+model AttributeValue {
+  id          String    @id @default(uuid())
+  value       String // e.g. "Red"
+  attributeId String
+  attribute   Attribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+
+  variants ProductVariantAttribute[]
+
+  @@map("attribute_values")
+}
+
+// ================== PRODUCT ==================
+
+model Product {
+  id          String  @id @default(uuid())
+  name        String
+  slug        String  @unique
+  description String?
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  brandId String?
+  brand   Brand?  @relation(fields: [brandId], references: [id])
+
+  variants ProductVariant[]
+
+  status    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("products")
+}
+
+// Each product can have multiple variants (e.g. Red/Large, Blue/Small)
+model ProductVariant {
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  sku       String   @unique
+  price     Decimal  @db.Decimal(10, 2)
+  salePrice Decimal? @db.Decimal(10, 2)
+  stock     Int      @default(0)
+
+  attributes ProductVariantAttribute[]
+  media      ProductVariantMedia[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("product_variants")
+}
+
+// Join table: which attribute values belong to which variant
+model ProductVariantAttribute {
+  variantId        String
+  variant          ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attributeValueId String
+  attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+
+  @@id([variantId, attributeValueId])
+  @@map("product_variant_attributes")
+}
+
+// Join table: which media/images belong to which variant
+model ProductVariantMedia {
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  mediaId   String
+  sortOrder Int            @default(0)
+
+  @@id([variantId, mediaId])
+  @@map("product_variant_media")
+}
