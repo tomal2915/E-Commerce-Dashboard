@@ -4,7 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import * as sharp from 'sharp';
+import sharp from 'sharp';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { PrismaService } from '../../prisma/prisma.service';

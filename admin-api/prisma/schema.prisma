@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 // ================== USERS & ROLES ==================
@@ -145,7 +145,7 @@ model Category {
 
 model Brand {
   id          String    @id @default(uuid())
-  name        String
+  name        String    @unique // <-- add this
   slug        String    @unique
   logoId      String?
   logo        Media?    @relation("BrandLogo", fields: [logoId], references: [id])

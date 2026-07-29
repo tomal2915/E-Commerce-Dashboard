@@ -12,7 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { MediaService } from './media.service';
 import { UpdateMediaDto } from './dto/update-media.dto';
 import { multerConfig } from './media.multer.config';
