@@ -1,0 +1,55 @@
+// src/modules/user/user.controller.ts
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Req,
+} from '@nestjs/common';
+import { Request } from 'express';
+import { UserService } from './user.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
+
+@Controller('users')
+export class UserController {
+  constructor(private userService: UserService) {}
+
+  @RequirePermission('user:create')
+  @Post()
+  create(@Body() dto: CreateUserDto) {
+    return this.userService.create(dto);
+  }
+
+  @RequirePermission('user:read')
+  @Get()
+  findAll() {
+    return this.userService.findAll();
+  }
+
+  @RequirePermission('user:read')
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.userService.findOne(id);
+  }
+
+  @RequirePermission('user:update')
+  @Put(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDto,
+    @Req() req: Request,
+  ) {
+    return this.userService.update(id, dto, (req as any).user.id);
+  }
+
+  @RequirePermission('user:delete')
+  @Delete(':id')
+  remove(@Param('id') id: string, @Req() req: Request) {
+    return this.userService.remove(id, (req as any).user.id);
+  }
+}

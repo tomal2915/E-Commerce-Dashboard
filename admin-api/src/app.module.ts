@@ -1,10 +1,86 @@
+// src/app.module.ts
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
+import { JwtModule } from '@nestjs/jwt';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { PermissionGuard } from './common/guards/permission.guard';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { AuthController } from './modules/auth.controller';
+import { AuthService } from './modules/auth.service';
+import { UserController } from './modules/user.controller';
+import { UserService } from './modules/user.service';
+import { PrismaService } from './prisma.service';
+import { PrismaModule } from './prisma/prisma.module';
+import { UserModule } from './modules/user/user.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { PermissionModule } from './modules/permission/permission.module';
+import { PermissionController } from './modules/permission.controller';
+import { PermissionService } from './modules/permission.service';
+import { RoleModule } from './modules/role/role.module';
+import { RoleController } from './modules/role.controller';
+import { RoleService } from './modules/role.service';
+import { MediaModule } from './modules/media/media.module';
+import { MediaController } from './modules/media.controller';
+import { MediaService } from './modules/media.service';
+import { CategoryModule } from './modules/category/category.module';
+import { CategoryController } from './modules/category.controller';
+import { CategoryService } from './modules/category.service';
+import { BrandModule } from './modules/brand/brand.module';
+import { BrandController } from './modules/brand.controller';
+import { BrandService } from './modules/brand.service';
+import { AttributeModule } from './modules/attribute/attribute.module';
+import { AttributeController } from './modules/attribute.controller';
+import { AttributeService } from './modules/attribute.service';
+import { ProductModule } from './modules/product/product.module';
+import { ProductController } from './modules/product.controller';
+import { ProductService } from './modules/product.service';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    PrismaModule,
+    JwtModule.register({
+      global: true,
+      secret: process.env.JWT_ACCESS_SECRET,
+      signOptions: { expiresIn: '15m' },
+    }),
+    AuthModule,
+    UserModule,
+    PermissionModule,
+    RoleModule,
+    MediaModule,
+    CategoryModule,
+    BrandModule,
+    AttributeModule,
+    ProductModule,
+  ],
+  providers: [
+    // Order matters: JwtAuthGuard runs first, then PermissionGuard
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: PermissionGuard },
+    { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    AuthService,
+    UserService,
+    PrismaService,
+    PermissionService,
+    RoleService,
+    MediaService,
+    CategoryService,
+    BrandService,
+    AttributeService,
+    ProductService,
+  ],
+  controllers: [
+    AuthController,
+    UserController,
+    PermissionController,
+    RoleController,
+    MediaController,
+    CategoryController,
+    BrandController,
+    AttributeController,
+    ProductController,
+  ],
 })
 export class AppModule {}
