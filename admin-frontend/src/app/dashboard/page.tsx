@@ -1,25 +1,31 @@
 // src/app/dashboard/page.tsx
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useAuth } from '@/context/AuthContext';
-import { ProtectedLayout } from '@/components/ProtectedLayout';
+import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
+import { ProtectedLayout } from "@/components/ProtectedLayout";
 
 // Quick links shown only if the user actually has permission for that section —
 // reuses the same permission list the Sidebar filters against.
 const QUICK_LINKS = [
-  { label: 'Products', href: '/products', requiredPermission: 'product:read' },
-  { label: 'Categories', href: '/categories', requiredPermission: 'category:read' },
-  { label: 'Brands', href: '/brands', requiredPermission: 'brand:read' },
-  { label: 'Media Library', href: '/media', requiredPermission: 'media:read' },
-  { label: 'Users', href: '/users', requiredPermission: 'user:read' },
-  { label: 'Roles', href: '/roles', requiredPermission: 'role:read' },
+  { label: "Products", href: "/products", requiredPermission: "product:read" },
+  {
+    label: "Categories",
+    href: "/categories",
+    requiredPermission: "category:read",
+  },
+  { label: "Brands", href: "/brands", requiredPermission: "brand:read" },
+  { label: "Media Library", href: "/media", requiredPermission: "media:read" },
+  { label: "Users", href: "/users", requiredPermission: "user:read" },
+  { label: "Roles", href: "/roles", requiredPermission: "role:read" },
 ];
 
 export default function DashboardPage() {
   const { user, logout, hasPermission } = useAuth();
 
-  const visibleLinks = QUICK_LINKS.filter((link) => hasPermission(link.requiredPermission));
+  const visibleLinks = QUICK_LINKS.filter((link) =>
+    hasPermission(link.requiredPermission),
+  );
 
   return (
     <ProtectedLayout>
@@ -35,7 +41,7 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={logout}
-            className="text-sm text-slate-500 hover:text-slate-700 hover:underline"
+            className="text-sm text-slate-500 hover:text-slate-700 hover:cursor-pointer hover:underline "
           >
             Log out
           </button>
@@ -45,17 +51,25 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
           <div className="grid grid-cols-3 gap-6">
             <div>
-              <p className="text-xs text-slate-400 uppercase tracking-wide">Signed in as</p>
-              <p className="text-sm font-medium text-slate-800 mt-1">{user?.email}</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wide">
+                Signed in as
+              </p>
+              <p className="text-sm font-medium text-slate-800 mt-1">
+                {user?.email}
+              </p>
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase tracking-wide">Role</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wide">
+                Role
+              </p>
               <span className="inline-block bg-slate-100 text-slate-700 text-xs px-2 py-1 rounded-md mt-1 font-medium">
                 {user?.role.name}
               </span>
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase tracking-wide">Permissions</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wide">
+                Permissions
+              </p>
               <p className="text-sm font-medium text-slate-800 mt-1">
                 {user?.permissions.length ?? 0} granted
               </p>
@@ -65,7 +79,9 @@ export default function DashboardPage() {
 
         {/* ---- Quick access, filtered by permission ---- */}
         <div>
-          <h2 className="text-sm font-medium text-slate-700 mb-3">Quick Access</h2>
+          <h2 className="text-sm font-medium text-slate-700 mb-3">
+            Quick Access
+          </h2>
 
           {visibleLinks.length === 0 ? (
             <p className="text-sm text-slate-400">

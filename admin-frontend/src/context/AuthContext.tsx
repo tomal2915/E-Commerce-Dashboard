@@ -1,26 +1,12 @@
 // src/context/AuthContext.tsx
 'use client';
-
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  ReactNode,
-} from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, setAccessToken } from '@/lib/axios';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: { id: string; name: string };
-  permissions: string[];
-}
+import { SessionUser } from '@/types';
 
 interface AuthContextType {
-  user: User | null;
+  user: SessionUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -30,59 +16,52 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // true while we check session on load
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // ---- On every page reload: try to restore the session ----
-  useEffect(() => {
-    async function restoreSession() {
-      try {
-        // Access token is gone (in-memory only), so ask for a fresh one
-        // using the httpOnly refresh_token cookie the browser sends automatically.
-        const refreshRes = await api.post('/auth/refresh');
-        setAccessToken(refreshRes.data.data.accessToken);
+  async function restoreSession() {
+    try {
+      const refreshRes = await api.post('/auth/refresh');
+      setAccessToken(refreshRes.data.data.accessToken);
 
-        // Now that we have a valid access token, fetch the user's profile
-        const meRes = await api.get('/auth/me');
-        setUser(meRes.data.data);
-      } catch {
-        // No valid refresh token either — user is simply logged out
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
+      const sessionRes = await api.get('/auth/session');
+      setUser(sessionRes.data.data);
+    } catch {
+      setUser(null);
+    } finally {
+      setIsLoading(false);
     }
+  }
 
+  useEffect(() => {
     restoreSession();
 
-    // ---- Listen for session-expired events fired by the axios interceptor ----
     function handleSessionExpired() {
       setUser(null);
       router.push('/login');
     }
     window.addEventListener('app:session-expired', handleSessionExpired);
     return () => window.removeEventListener('app:session-expired', handleSessionExpired);
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function login(email: string, password: string) {
     const res = await api.post('/auth/login', { email, password });
     setAccessToken(res.data.data.accessToken);
-
-    const meRes = await api.get('/auth/me');
-    setUser(meRes.data.data);
+    const sessionRes = await api.get('/auth/session');
+    setUser(sessionRes.data.data);
     router.push('/dashboard');
   }
 
   async function logout() {
-    await api.post('/auth/logout');
+    await api.post('/auth/logout'); // revokes refresh token server-side
     setAccessToken(null);
     setUser(null);
     router.push('/login');
   }
 
-  // Quick helper so components can do: hasPermission('product:create')
-  function hasPermission(permission: string): boolean {
+  function hasPermission(permission: string) {
     return user?.permissions.includes(permission) ?? false;
   }
 
@@ -93,9 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Custom hook so components just do: const { user, hasPermission } = useAuth();
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 }

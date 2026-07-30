@@ -6,7 +6,7 @@ import { api } from "@/lib/axios";
 import { useToast } from "@/components/ToastProvider";
 import { getErrorMessage } from "@/lib/apiError";
 import { LoadingState, EmptyState, ErrorState } from "@/components/DataState";
-import { Sidebar } from "@/components/Sidebar";
+import { Sidebar } from "@/components/layout/Sidebar";
 
 interface MediaItem {
   id: string;

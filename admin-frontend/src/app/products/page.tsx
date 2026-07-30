@@ -1,12 +1,12 @@
 // src/app/products/page.tsx
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { api } from '@/lib/axios';
-import { getErrorMessage } from '@/lib/apiError';
-import { LoadingState, EmptyState, ErrorState } from '@/components/DataState';
-import { Sidebar } from '@/components/Sidebar';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { api } from "@/lib/axios";
+import { getErrorMessage } from "@/lib/apiError";
+import { LoadingState, EmptyState, ErrorState } from "@/components/DataState";
+import { Sidebar } from "@/components/layout/Sidebar";
 
 interface ProductRow {
   id: string;
@@ -25,23 +25,28 @@ interface CategoryOption {
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<ProductRow[] | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
-  const [search, setSearch] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [search, setSearch] = useState("");
+  const [categoryId, setCategoryId] = useState("");
   const [page, setPage] = useState(1);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
 
   useEffect(() => {
-    api.get('/categories').then((res) => setCategories(res.data.data));
+    api.get("/categories").then((res) => setCategories(res.data.data));
   }, []);
 
   async function loadProducts() {
-    setError('');
+    setError("");
     setProducts(null);
     try {
-      const res = await api.get('/products', {
-        params: { page, limit: 20, search: search || undefined, categoryId: categoryId || undefined },
+      const res = await api.get("/products", {
+        params: {
+          page,
+          limit: 20,
+          search: search || undefined,
+          categoryId: categoryId || undefined,
+        },
       });
       setProducts(res.data.data.data);
       setMeta(res.data.data.meta);
@@ -73,7 +78,7 @@ export default function ProductsPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-xl font-semibold text-slate-900">Products</h1>
           <Link
-            href="/products/new"
+            href="/products/add-new-products"
             className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800"
           >
             + New Product
@@ -104,9 +109,13 @@ export default function ProductsPage() {
           </select>
         </div>
 
-        {products === null && !error && <LoadingState label="Loading products..." />}
+        {products === null && !error && (
+          <LoadingState label="Loading products..." />
+        )}
         {error && <ErrorState message={error} onRetry={loadProducts} />}
-        {products && products.length === 0 && <EmptyState label="No products match your filters" />}
+        {products && products.length === 0 && (
+          <EmptyState label="No products match your filters" />
+        )}
 
         {products && products.length > 0 && (
           <>
@@ -116,7 +125,9 @@ export default function ProductsPage() {
                   <tr>
                     <th className="text-left px-4 py-2 font-medium">Product</th>
                     <th className="text-left px-4 py-2 font-medium">Brand</th>
-                    <th className="text-left px-4 py-2 font-medium">Categories</th>
+                    <th className="text-left px-4 py-2 font-medium">
+                      Categories
+                    </th>
                     <th className="text-left px-4 py-2 font-medium">Price</th>
                     <th className="text-left px-4 py-2 font-medium">Status</th>
                   </tr>
@@ -133,12 +144,17 @@ export default function ProductsPage() {
                           {product.name}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{product.brand?.name ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">
-                        {product.categories.map((c) => c.category.name).join(', ') || '—'}
+                        {product.brand?.name ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {product.categories
+                          .map((c) => c.category.name)
+                          .join(", ") || "—"}
                       </td>
                       <td className="px-4 py-3 text-slate-800">
-                        {product.priceInfo.minPrice === product.priceInfo.maxPrice
+                        {product.priceInfo.minPrice ===
+                        product.priceInfo.maxPrice
                           ? `$${product.priceInfo.minPrice}`
                           : `$${product.priceInfo.minPrice} - $${product.priceInfo.maxPrice}`}
                       </td>
@@ -146,11 +162,11 @@ export default function ProductsPage() {
                         <span
                           className={`text-xs px-2 py-1 rounded-md ${
                             product.status
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-slate-200 text-slate-500'
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-slate-200 text-slate-500"
                           }`}
                         >
-                          {product.status ? 'Active' : 'Inactive'}
+                          {product.status ? "Active" : "Inactive"}
                         </span>
                       </td>
                     </tr>
@@ -172,7 +188,9 @@ export default function ProductsPage() {
                   Previous
                 </button>
                 <button
-                  onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+                  onClick={() =>
+                    setPage((p) => Math.min(meta.totalPages, p + 1))
+                  }
                   disabled={page >= meta.totalPages}
                   className="px-3 py-1.5 rounded-lg border border-slate-300 disabled:opacity-40"
                 >
