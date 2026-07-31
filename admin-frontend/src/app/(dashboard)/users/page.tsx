@@ -356,7 +356,7 @@ function UserFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Gender</Label>
-              <Select value={gender} onValueChange={setGender}>
+              <Select value={gender || ""} onValueChange={(value) => setGender(value || "")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select gender" />
                 </SelectTrigger>
