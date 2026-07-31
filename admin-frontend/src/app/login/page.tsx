@@ -20,8 +20,9 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setIsSubmitting(true);
+    console.log('Attempting login with:', { email, password });
     try {
-      await login(email, password);
+      // await login(email, password);
     } catch (err) {
       setError(getErrorMessage(err)); // backend returns generic "Invalid email or password"
     } finally {
