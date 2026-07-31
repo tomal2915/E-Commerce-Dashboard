@@ -100,21 +100,21 @@ export default function NewProductPage() {
   >({});
   const [variants, setVariants] = useState<VariantDraft[]>([]);
 
-    useEffect(() => {
-      api.get("/brands").then((res) => setBrands(res.data.data));
-      api.get("/categories").then((res) => setCategories(res.data.data));
-      api.get("/attributes").then((res) => setAttributes(res.data.data));
-    }, []);
+  useEffect(() => {
+    api.get("/brands").then((res) => setBrands(res.data.data));
+    api.get("/categories").then((res) => setCategories(res.data.data));
+    api.get("/attributes").then((res) => setAttributes(res.data.data));
+  }, []);
 
-//   useEffect(() => {
-//     api
-//       .get("/attributes")
-//       .then((res) => {
-//         console.log("attributes response:", res.data);
-//         setAttributes(res.data.data);
-//       })
-//       .catch((err) => console.error("attributes fetch failed:", err));
-//   }, []);
+  //   useEffect(() => {
+  //     api
+  //       .get("/attributes")
+  //       .then((res) => {
+  //         console.log("attributes response:", res.data);
+  //         setAttributes(res.data.data);
+  //       })
+  //       .catch((err) => console.error("attributes fetch failed:", err));
+  //   }, []);
 
   useEffect(() => {
     if (!editingId) return;
@@ -426,7 +426,10 @@ export default function NewProductPage() {
         <div className="space-y-6">
           <div className="space-y-1.5">
             <Label>Brand</Label>
-            <Select value={brandId} onValueChange={setBrandId}>
+            <Select
+              value={brandId}
+              onValueChange={(value) => setBrandId(value ?? "")}
+            >
               <SelectTrigger className="max-w-sm">
                 <SelectValue placeholder="No brand" />
               </SelectTrigger>
