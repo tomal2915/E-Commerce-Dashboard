@@ -95,7 +95,7 @@ export default function NewProductPage() {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   const [attributes, setAttributes] = useState<Attribute[]>([]);
-  const [selectedValuesByAttribute, setSelectedValuesByAttribute] = useState
+  const [selectedValuesByAttribute, setSelectedValuesByAttribute] = useState<
     Record<string, AttributeValueOption[]>
   >({});
   const [variants, setVariants] = useState<VariantDraft[]>([]);
