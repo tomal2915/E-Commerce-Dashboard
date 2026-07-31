@@ -48,18 +48,27 @@ export class RoleService {
 
   async findAll() {
     const roles = await this.prisma.role.findMany({
-      include: { permissions: { include: { permission: true } } },
+      include: {
+        permissions: { include: { permission: true } },
+        _count: { select: { users: true } },
+      },
     });
-    return roles.map((r) => this.formatRole(r));
+    return roles.map((r) => ({
+      ...this.formatRole(r),
+      userCount: r._count.users,
+    }));
   }
 
   async findOne(id: string) {
     const role = await this.prisma.role.findUnique({
       where: { id },
-      include: { permissions: { include: { permission: true } } },
+      include: {
+        permissions: { include: { permission: true } },
+        _count: { select: { users: true } },
+      },
     });
     if (!role) throw new NotFoundException('Role not found');
-    return this.formatRole(role);
+    return { ...this.formatRole(role), userCount: role._count.users };
   }
 
   /**

@@ -1,6 +1,12 @@
-// src/modules/attribute/attribute.service.ts
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+// src/modules/attribute/attribute.service.ts — full replacement
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import slugify from 'slugify';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAttributeDto } from './dto/create-attribute.dto';
 import { UpdateAttributeDto } from './dto/update-attribute.dto';
@@ -11,10 +17,11 @@ export class AttributeService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateAttributeDto) {
-    const existing = await this.prisma.attribute.findUnique({ where: { name: dto.name } });
-    if (existing) {
+    const existing = await this.prisma.attribute.findUnique({
+      where: { name: dto.name },
+    });
+    if (existing)
       throw new ConflictException('An attribute with this name already exists');
-    }
 
     const slug = slugify(dto.name, { lower: true, strict: true });
 
@@ -23,9 +30,11 @@ export class AttributeService {
         name: dto.name,
         slug,
         type: dto.type,
-        // If initial values were provided (e.g. ["Red", "Blue"]), create them too
         values: {
-          create: (dto.values ?? []).map((value) => ({ value })),
+          create: (dto.values ?? []).map((value) => ({
+            value,
+            slug: slugify(value, { lower: true, strict: true }),
+          })),
         },
       },
       include: { values: true },
@@ -34,7 +43,7 @@ export class AttributeService {
 
   async findAll() {
     return this.prisma.attribute.findMany({
-      include: { values: true },
+      include: { values: { include: { referenceMedia: true } } },
       orderBy: { name: 'asc' },
     });
   }
@@ -42,7 +51,7 @@ export class AttributeService {
   async findOne(id: string) {
     const attribute = await this.prisma.attribute.findUnique({
       where: { id },
-      include: { values: true },
+      include: { values: { include: { referenceMedia: true } } },
     });
     if (!attribute) throw new NotFoundException('Attribute not found');
     return attribute;
@@ -50,31 +59,30 @@ export class AttributeService {
 
   async update(id: string, dto: UpdateAttributeDto) {
     await this.findOne(id);
-
     if (dto.name) {
-      const existing = await this.prisma.attribute.findUnique({ where: { name: dto.name } });
+      const existing = await this.prisma.attribute.findUnique({
+        where: { name: dto.name },
+      });
       if (existing && existing.id !== id) {
-        throw new ConflictException('An attribute with this name already exists');
+        throw new ConflictException(
+          'An attribute with this name already exists',
+        );
       }
     }
-
     return this.prisma.attribute.update({
       where: { id },
       data: {
         name: dto.name,
-        slug: dto.name ? slugify(dto.name, { lower: true, strict: true }) : undefined,
+        slug: dto.name
+          ? slugify(dto.name, { lower: true, strict: true })
+          : undefined,
         type: dto.type,
       },
     });
   }
 
-  /**
-   * Blocks deleting an attribute if any of its values are still used by
-   * product variants — deleting it would silently break those variants.
-   */
   async remove(id: string) {
     await this.findOne(id);
-
     const usageCount = await this.prisma.productVariantAttribute.count({
       where: { attributeValue: { attributeId: id } },
     });
@@ -83,30 +91,83 @@ export class AttributeService {
         'Cannot delete this attribute: one or more of its values are used in product variants.',
       );
     }
-
     await this.prisma.attribute.delete({ where: { id } });
     return { message: 'Attribute deleted successfully' };
   }
 
-  // ---------- Attribute Values ----------
-
   async addValue(attributeId: string, dto: CreateAttributeValueDto) {
-    await this.findOne(attributeId); // ensures attribute exists
+    const attribute = await this.findOne(attributeId);
 
-    const existing = await this.prisma.attributeValue.findFirst({
-      where: { attributeId, value: dto.value },
-    });
-    if (existing) {
-      throw new ConflictException('This value already exists for this attribute');
+    if (attribute.type === 'colour_swatch' && !dto.referenceValue) {
+      throw new BadRequestException(
+        'referenceValue (hex code) is required for a colour_swatch attribute',
+      );
+    }
+    if (attribute.type === 'image_swatch' && !dto.referenceMediaId) {
+      throw new BadRequestException(
+        'referenceMediaId is required for an image_swatch attribute',
+      );
     }
 
-    return this.prisma.attributeValue.create({
-      data: { value: dto.value, attributeId },
+    try {
+      return await this.prisma.attributeValue.create({
+        data: {
+          value: dto.value,
+          slug: slugify(dto.value, { lower: true, strict: true }),
+          referenceValue: dto.referenceValue,
+          referenceMediaId: dto.referenceMediaId,
+          attributeId,
+        },
+      });
+    } catch (err) {
+      // DB-enforced @@unique([attributeId, value]) — catch and convert to 409
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'This value already exists for this attribute',
+        );
+      }
+      throw err;
+    }
+  }
+
+  async updateValue(valueId: string, dto: CreateAttributeValueDto) {
+    const value = await this.prisma.attributeValue.findUnique({
+      where: { id: valueId },
     });
+    if (!value) throw new NotFoundException('Attribute value not found');
+
+    try {
+      return await this.prisma.attributeValue.update({
+        where: { id: valueId },
+        data: {
+          value: dto.value,
+          slug: dto.value
+            ? slugify(dto.value, { lower: true, strict: true })
+            : undefined,
+          referenceValue: dto.referenceValue,
+          referenceMediaId: dto.referenceMediaId,
+        },
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'This value already exists for this attribute',
+        );
+      }
+      throw err;
+    }
   }
 
   async removeValue(valueId: string) {
-    const value = await this.prisma.attributeValue.findUnique({ where: { id: valueId } });
+    const value = await this.prisma.attributeValue.findUnique({
+      where: { id: valueId },
+    });
     if (!value) throw new NotFoundException('Attribute value not found');
 
     const usageCount = await this.prisma.productVariantAttribute.count({

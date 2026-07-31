@@ -1,9 +1,21 @@
 // src/modules/brand/brand.service.ts
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import slugify from 'slugify';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
+import { BrandQueryDto } from './dto/brand-query.dto';
+
+interface FindAllQuery {
+  search?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}
 
 @Injectable()
 export class BrandService {
@@ -24,8 +36,17 @@ export class BrandService {
     });
   }
 
-  async findAll() {
-    return this.prisma.brand.findMany({ orderBy: { name: 'asc' } });
+  async findAll(query: BrandQueryDto) {
+    return this.prisma.brand.findMany({
+      where: {
+        name: query.search
+          ? { contains: query.search, mode: 'insensitive' }
+          : undefined,
+        status:
+          query.status !== undefined ? query.status === 'true' : undefined,
+      },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async findOne(id: string) {
@@ -62,7 +83,9 @@ export class BrandService {
   async remove(id: string) {
     await this.findOne(id);
 
-    const productCount = await this.prisma.product.count({ where: { brandId: id } });
+    const productCount = await this.prisma.product.count({
+      where: { brandId: id },
+    });
     if (productCount > 0) {
       throw new ConflictException(
         `Cannot delete this brand: ${productCount} product(s) are still linked to it.`,
@@ -82,7 +105,10 @@ export class BrandService {
     }
   }
 
-  private async generateUniqueSlug(name: string, excludeId?: string): Promise<string> {
+  private async generateUniqueSlug(
+    name: string,
+    excludeId?: string,
+  ): Promise<string> {
     const baseSlug = slugify(name, { lower: true, strict: true });
     let slug = baseSlug;
     let counter = 1;

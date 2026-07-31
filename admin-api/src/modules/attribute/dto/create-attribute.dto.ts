@@ -1,15 +1,28 @@
 // src/modules/attribute/dto/create-attribute.dto.ts
-import { IsArray, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+
+const ATTRIBUTE_TYPES = [
+  'dropdown',
+  'radio',
+  'checkbox',
+  'colour_swatch',
+  'image_swatch',
+];
 
 export class CreateAttributeDto {
   @IsString()
   @IsNotEmpty()
-  name: string; // e.g. "Color"
+  name: string;
 
-  @IsIn(['text', 'color', 'number'])
+  @IsIn(ATTRIBUTE_TYPES)
   type: string;
 
-  // Optional: create some values right away, e.g. ["Red", "Blue"]
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

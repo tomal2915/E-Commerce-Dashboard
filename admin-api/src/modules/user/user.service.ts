@@ -1,4 +1,4 @@
-// src/modules/user/user.service.ts
+// src/modules/user/user.service.ts — full corrected version
 import {
   Injectable,
   ConflictException,
@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserQueryDto } from './dto/user-query.dto';
 
 @Injectable()
 export class UserService {
@@ -38,9 +39,21 @@ export class UserService {
     return this.sanitize(user);
   }
 
-  async findAll() {
+  async findAll(query: UserQueryDto) {
     const users = await this.prisma.user.findMany({
+      where: {
+        roleId: query.roleId || undefined,
+        isActive:
+          query.isActive !== undefined ? query.isActive === 'true' : undefined,
+        ...(query.search && {
+          OR: [
+            { name: { contains: query.search, mode: 'insensitive' } },
+            { email: { contains: query.search, mode: 'insensitive' } },
+          ],
+        }),
+      },
       include: { role: true },
+      orderBy: { createdAt: 'desc' },
     });
     return users.map((u) => this.sanitize(u));
   }
@@ -62,9 +75,6 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    // ---- Prevent self-escalation ----
-    // If the person making the request IS the user being edited,
-    // and they're trying to change their own roleId, block it.
     if (requestingUserId === id && dto.roleId && dto.roleId !== target.roleId) {
       throw new ForbiddenException('You cannot change your own role');
     }
@@ -76,6 +86,7 @@ export class UserService {
         phone: dto.phone,
         gender: dto.gender,
         roleId: dto.roleId,
+        isActive: dto.isActive,
       },
     });
 
@@ -92,11 +103,12 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
+    // Hard delete — the record is permanently removed. RefreshToken rows
+    // cascade automatically (onDelete: Cascade in schema).
     await this.prisma.user.delete({ where: { id } });
     return { message: 'User deleted successfully' };
   }
 
-  // Never send the password hash back to the client
   private sanitize(user: any) {
     const { password, ...rest } = user;
     return rest;

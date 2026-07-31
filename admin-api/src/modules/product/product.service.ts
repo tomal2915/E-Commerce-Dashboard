@@ -11,65 +11,70 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 
+const LOW_STOCK_DEFAULT_THRESHOLD = 5;
+
 @Injectable()
 export class ProductService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateProductDto) {
-    // ---- Step 1: Validate business rules BEFORE touching the database ----
     this.validatePricing(dto);
     this.validateSingleThumbnail(dto.media ?? []);
+    if (dto.hasVariants)
+      this.validateVariantMediaThumbnails(dto.variants ?? []);
+    if (dto.hasVariants)
+      this.validateNoDuplicateCombinations(dto.variants ?? []);
 
     const slug = await this.generateUniqueSlug(dto.name);
 
-    // Collect every SKU this request would create, so we can check for
-    // duplicates within the SAME request (e.g. two variants with the same SKU)
     const incomingSkus = dto.hasVariants
       ? dto.variants!.map((v) => v.sku)
       : [dto.sku!];
-
-    const hasDuplicateSkuInRequest =
-      new Set(incomingSkus).size !== incomingSkus.length;
-    if (hasDuplicateSkuInRequest) {
+    if (new Set(incomingSkus).size !== incomingSkus.length) {
       throw new BadRequestException('Duplicate SKUs found within the request');
     }
-
     await this.assertSkusAreFree(incomingSkus);
 
-    // ---- Step 2: Run everything inside a single transaction ----
-    // If ANY step fails (e.g. a variant insert fails), Prisma rolls back
-    // EVERYTHING — so we never end up with a half-created product.
+    if (dto.hasVariants) {
+      await this.assertAttributeValuesExist(dto.variants!);
+    }
+
     try {
       const product = await this.prisma.$transaction(async (tx) => {
         const created = await tx.product.create({
           data: {
             name: dto.name,
             slug,
-            description: dto.description,
+            shortDescription: dto.shortDescription,
+            longDescription: dto.longDescription,
             hasVariants: dto.hasVariants,
             brandId: dto.brandId,
+            weight: dto.weight,
+            activeFlag: dto.activeFlag ?? true,
+            featuredFlag: dto.featuredFlag ?? false,
+            sortOrder: dto.sortOrder ?? 0,
 
-            // Simple product fields — undefined values are simply skipped by Prisma
             price: dto.hasVariants ? undefined : dto.price,
             salePrice: dto.hasVariants ? undefined : dto.salePrice,
             stock: dto.hasVariants ? undefined : dto.stock,
             sku: dto.hasVariants ? undefined : dto.sku,
+            stockStatus: dto.hasVariants
+              ? undefined
+              : this.deriveStockStatus(dto.stock, LOW_STOCK_DEFAULT_THRESHOLD),
 
-            // Category links
             categories: {
               create: dto.categoryIds.map((categoryId) => ({ categoryId })),
             },
 
-            // Product-level media links
             media: {
               create: (dto.media ?? []).map((m) => ({
                 mediaId: m.mediaId,
                 isThumbnail: m.isThumbnail ?? false,
+                isGallery: m.isGallery ?? true,
                 sortOrder: m.sortOrder ?? 0,
               })),
             },
 
-            // Variants (only relevant when hasVariants = true)
             variants: dto.hasVariants
               ? {
                   create: dto.variants!.map((v) => ({
@@ -77,9 +82,24 @@ export class ProductService {
                     price: v.price,
                     salePrice: v.salePrice,
                     stock: v.stock,
+                    lowStockThreshold:
+                      v.lowStockThreshold ?? LOW_STOCK_DEFAULT_THRESHOLD,
+                    weight: v.weight,
+                    activeFlag: v.activeFlag ?? true,
+                    stockStatus: this.deriveStockStatus(
+                      v.stock,
+                      v.lowStockThreshold ?? LOW_STOCK_DEFAULT_THRESHOLD,
+                    ),
                     attributes: {
                       create: v.attributeValueIds.map((attributeValueId) => ({
                         attributeValueId,
+                      })),
+                    },
+                    media: {
+                      create: (v.media ?? []).map((m) => ({
+                        mediaId: m.mediaId,
+                        isThumbnail: m.isThumbnail ?? false,
+                        sortOrder: m.sortOrder ?? 0,
                       })),
                     },
                   })),
@@ -88,21 +108,47 @@ export class ProductService {
           },
           include: {
             categories: { include: { category: true } },
-            media: true,
-            variants: { include: { attributes: true } },
+            media: { include: { media: true } },
+            variants: {
+              include: {
+                attributes: { include: { attributeValue: true } },
+                media: { include: { media: true } },
+              },
+            },
             brand: true,
           },
         });
+
+        // Attribute-value-level media (e.g. "Red" swatch photos) — attached once,
+        // shared across every variant using that value, per spec.
+        if (dto.attributeValueMedia?.length) {
+          await tx.productMedia.createMany({
+            data: dto.attributeValueMedia.map((m) => ({
+              mediaId: m.mediaId,
+              attributeValueId: m.attributeValueId,
+              isGallery: true,
+            })),
+          });
+        }
 
         return created;
       });
 
       return product;
     } catch (err) {
-      // A race condition (two requests creating the same slug/sku at the
-      // exact same time) shows up here as a Prisma "unique constraint" error.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         throw new ConflictException('Product slug or SKU already exists');
+      }
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2003'
+      ) {
+        throw new BadRequestException(
+          'A referenced category, brand, media item, or attribute value does not exist',
+        );
       }
       throw err;
     }
@@ -112,17 +158,28 @@ export class ProductService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
-    // Build the WHERE clause dynamically based on which filters were sent
     const where: Prisma.ProductWhereInput = {
-      status: true,
       ...(query.search && {
-        name: { contains: query.search, mode: 'insensitive' },
+        OR: [
+          { name: { contains: query.search, mode: 'insensitive' } },
+          { sku: { contains: query.search, mode: 'insensitive' } },
+          {
+            variants: {
+              some: { sku: { contains: query.search, mode: 'insensitive' } },
+            },
+          },
+        ],
       }),
       ...(query.categoryId && {
         categories: { some: { categoryId: query.categoryId } },
       }),
       ...(query.brandId && { brandId: query.brandId }),
+      ...(query.status && { activeFlag: query.status === 'active' }),
     };
+
+    const orderBy = query.sortBy
+      ? { [query.sortBy]: query.sortDir ?? 'asc' }
+      : { createdAt: 'desc' as const };
 
     const [total, products] = await this.prisma.$transaction([
       this.prisma.product.count({ where }),
@@ -130,11 +187,15 @@ export class ProductService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         include: {
           brand: true,
           categories: { include: { category: true } },
-          media: { where: { isThumbnail: true }, take: 1 },
+          media: {
+            where: { isThumbnail: true },
+            include: { media: true },
+            take: 1,
+          },
           variants: { select: { price: true, salePrice: true, stock: true } },
         },
       }),
@@ -142,12 +203,7 @@ export class ProductService {
 
     return {
       data: products.map((p) => this.attachPriceSummary(p)),
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
 
@@ -157,53 +213,118 @@ export class ProductService {
       include: {
         brand: true,
         categories: { include: { category: true } },
-        media: true,
+        media: { include: { media: true } },
         variants: {
-          include: { attributes: { include: { attributeValue: true } } },
+          include: {
+            attributes: {
+              include: {
+                attributeValue: { include: { referenceMedia: true } },
+              },
+            },
+            media: { include: { media: true } },
+          },
         },
       },
     });
-
     if (!product) throw new NotFoundException('Product not found');
     return this.attachPriceSummary(product);
   }
 
-  // ---------- Helpers ----------
+  async remove(id: string) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) throw new NotFoundException('Product not found');
+
+    // Variants and ProductMedia attachment rows cascade via onDelete: Cascade —
+    // the underlying Media assets themselves are untouched, since other
+    // products may still reference them.
+    await this.prisma.product.delete({ where: { id } });
+    return { message: 'Product deleted successfully' };
+  }
+
+  // ---------- Validation helpers ----------
 
   private validatePricing(dto: CreateProductDto) {
     if (!dto.hasVariants) {
-      // Simple product: check its single price/salePrice pair
       if (dto.salePrice && Number(dto.salePrice) > Number(dto.price)) {
-        throw new BadRequestException('Sale price cannot exceed the normal price');
+        throw new BadRequestException(
+          'Sale price cannot exceed the normal price',
+        );
+      }
+      if (Number(dto.price) < 0 || (dto.stock ?? 0) < 0) {
+        throw new BadRequestException('Price and stock cannot be negative');
       }
       return;
     }
-
-    // Variable product: check EVERY variant individually
     for (const variant of dto.variants ?? []) {
-      if (variant.salePrice && Number(variant.salePrice) > Number(variant.price)) {
+      if (
+        variant.salePrice &&
+        Number(variant.salePrice) > Number(variant.price)
+      ) {
         throw new BadRequestException(
           `Sale price cannot exceed the normal price for SKU "${variant.sku}"`,
+        );
+      }
+      if (Number(variant.price) < 0 || variant.stock < 0) {
+        throw new BadRequestException(
+          `Price and stock cannot be negative for SKU "${variant.sku}"`,
         );
       }
     }
   }
 
   private validateSingleThumbnail(media: { isThumbnail?: boolean }[]) {
-    const thumbnailCount = media.filter((m) => m.isThumbnail).length;
-    if (thumbnailCount > 1) {
-      throw new BadRequestException('Only one media item can be marked as the thumbnail');
+    if (media.filter((m) => m.isThumbnail).length > 1) {
+      throw new BadRequestException(
+        'Only one media item can be marked as the product thumbnail',
+      );
+    }
+  }
+
+  private validateVariantMediaThumbnails(
+    variants: { sku: string; media?: { isThumbnail?: boolean }[] }[],
+  ) {
+    for (const v of variants) {
+      if ((v.media ?? []).filter((m) => m.isThumbnail).length > 1) {
+        throw new BadRequestException(
+          `Only one media item can be marked as the thumbnail for variant "${v.sku}"`,
+        );
+      }
+    }
+  }
+
+  private validateNoDuplicateCombinations(
+    variants: { attributeValueIds: string[] }[],
+  ) {
+    const keys = variants.map((v) => [...v.attributeValueIds].sort().join('-'));
+    if (new Set(keys).size !== keys.length) {
+      throw new BadRequestException(
+        'Two variants cannot share the identical attribute combination',
+      );
+    }
+  }
+
+  private async assertAttributeValuesExist(
+    variants: { attributeValueIds: string[] }[],
+  ) {
+    const allIds = Array.from(
+      new Set(variants.flatMap((v) => v.attributeValueIds)),
+    );
+    if (allIds.length === 0) return;
+    const found = await this.prisma.attributeValue.findMany({
+      where: { id: { in: allIds } },
+    });
+    if (found.length !== allIds.length) {
+      throw new BadRequestException(
+        'One or more variants reference an attribute value that does not exist',
+      );
     }
   }
 
   private async assertSkusAreFree(skus: string[]) {
-    // Check both simple-product SKUs and variant SKUs, since both draw
-    // from the same "namespace" of unique SKUs in your catalog.
     const [existingProduct, existingVariant] = await Promise.all([
       this.prisma.product.findFirst({ where: { sku: { in: skus } } }),
       this.prisma.productVariant.findFirst({ where: { sku: { in: skus } } }),
     ]);
-
     if (existingProduct || existingVariant) {
       const clashingSku = existingProduct?.sku ?? existingVariant?.sku;
       throw new ConflictException(`SKU "${clashingSku}" is already in use`);
@@ -214,21 +335,26 @@ export class ProductService {
     const baseSlug = slugify(name, { lower: true, strict: true });
     let slug = baseSlug;
     let counter = 1;
-
     while (true) {
-      const existing = await this.prisma.product.findUnique({ where: { slug } });
+      const existing = await this.prisma.product.findUnique({
+        where: { slug },
+      });
       if (!existing) return slug;
       slug = `${baseSlug}-${counter}`;
       counter++;
     }
   }
 
-  /**
-   * Adds a computed `priceInfo` field to a product:
-   * - Simple product: a single price + salePrice.
-   * - Variable product: the min/max price range across all its variants
-   *   (this is what a storefront shows as "$20 - $45").
-   */
+  private deriveStockStatus(
+    stock: number | undefined,
+    lowStockThreshold: number,
+  ): string {
+    const s = stock ?? 0;
+    if (s <= 0) return 'out_of_stock';
+    if (s <= lowStockThreshold) return 'low_stock';
+    return 'in_stock';
+  }
+
   private attachPriceSummary(product: any) {
     if (!product.hasVariants) {
       return {
@@ -241,19 +367,11 @@ export class ProductService {
         },
       };
     }
-
-    // For variable products, the "effective" price per variant is its
-    // salePrice if set, otherwise its regular price.
     const effectivePrices = (product.variants ?? []).map((v: any) =>
       Number(v.salePrice ?? v.price),
     );
-
     const minPrice = effectivePrices.length ? Math.min(...effectivePrices) : 0;
     const maxPrice = effectivePrices.length ? Math.max(...effectivePrices) : 0;
-
-    return {
-      ...product,
-      priceInfo: { minPrice, maxPrice },
-    };
+    return { ...product, priceInfo: { minPrice, maxPrice } };
   }
 }

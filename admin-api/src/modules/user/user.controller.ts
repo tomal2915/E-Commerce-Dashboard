@@ -7,6 +7,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -14,6 +15,7 @@ import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { RequirePermission } from '../../common/decorators/permissions.decorator';
+import { UserQueryDto } from './dto/user-query.dto';
 
 @Controller('users')
 export class UserController {
@@ -25,10 +27,10 @@ export class UserController {
     return this.userService.create(dto);
   }
 
-  @RequirePermission('user:read')
+  @RequirePermission('user:watch')
   @Get()
-  findAll() {
-    return this.userService.findAll();
+  findAll(@Query() query: UserQueryDto) {
+    return this.userService.findAll(query);
   }
 
   @RequirePermission('user:read')

@@ -9,8 +9,15 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateMediaDto } from './dto/update-media.dto';
+import { MediaQueryDto } from './dto/media-query.dto';
 
-const THUMBNAIL_DIR = './uploads/media/thumbnails';
+// const THUMBNAIL_DIR = join(process.cwd(), 'uploads', 'media', 'thumbnails');
+const THUMBNAIL_DIR = path.join(
+  process.cwd(),
+  'uploads',
+  'media',
+  'thumbnails',
+);
 const THUMBNAIL_WIDTH = 300;
 
 @Injectable()
@@ -73,8 +80,39 @@ export class MediaService {
     return media;
   }
 
-  async findAll() {
-    return this.prisma.media.findMany({ orderBy: { createdAt: 'desc' } });
+  async uploadMany(files: Express.Multer.File[], uploadedById: string) {
+    const results: Awaited<ReturnType<typeof this.uploadFile>>[] = [];
+    for (const file of files) {
+      results.push(await this.uploadFile(file, uploadedById));
+    }
+    return results;
+  }
+
+  async findAll(query: MediaQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 24;
+
+    const where = {
+      ...(query.search && {
+        fileName: { contains: query.search, mode: 'insensitive' as const },
+      }),
+      ...(query.type && { type: query.type }),
+    };
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.media.count({ where }),
+      this.prisma.media.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      data: items,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(id: string) {
@@ -98,10 +136,16 @@ export class MediaService {
   async remove(id: string) {
     const media = await this.findOne(id);
 
-    await fs.unlink(media.storedPath).catch(() => {
-      // File might already be gone — don't crash the request over it
+    // Detach cleanly from every product/variant/attribute-value attachment
+    // rather than refusing the delete — other products keep working, they
+    // simply lose this specific image reference.
+    await this.prisma.productMedia.deleteMany({ where: { mediaId: id } });
+    await this.prisma.attributeValue.updateMany({
+      where: { referenceMediaId: id },
+      data: { referenceMediaId: null },
     });
 
+    await fs.unlink(media.storedPath).catch(() => {});
     if (media.thumbnail) {
       const thumbnailFsPath = media.thumbnail.replace('/uploads', './uploads');
       await fs.unlink(thumbnailFsPath).catch(() => {});

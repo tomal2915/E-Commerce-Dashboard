@@ -35,9 +35,18 @@ import { AttributeService } from './modules/attribute.service';
 import { ProductModule } from './modules/product/product.module';
 import { ProductController } from './modules/product.controller';
 import { ProductService } from './modules/product.service';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 @Module({
   imports: [
+    ServeStaticModule.forRoot({
+      // Path to your root uploads folder on your hard drive
+      rootPath: join(__dirname, '..', 'uploads'),
+      // The prefix matches the inbound URL request pattern
+      serveRoot: '/uploads',
+      exclude: ['/api/(.*)'],
+    }),
     PrismaModule,
     JwtModule.register({
       global: true,

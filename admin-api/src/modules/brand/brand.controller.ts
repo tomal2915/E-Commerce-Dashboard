@@ -1,9 +1,19 @@
 // src/modules/brand/brand.controller.ts
-import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { BrandService } from './brand.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { RequirePermission } from '../../common/decorators/permissions.decorator';
+import { BrandQueryDto } from './dto/brand-query.dto';
 
 @Controller('brands')
 export class BrandController {
@@ -15,10 +25,10 @@ export class BrandController {
     return this.brandService.create(dto);
   }
 
-  @RequirePermission('brand:read')
+  @RequirePermission('brand:watch')
   @Get()
-  findAll() {
-    return this.brandService.findAll();
+  findAll(@Query() query: BrandQueryDto) {
+    return this.brandService.findAll(query);
   }
 
   @RequirePermission('brand:read')

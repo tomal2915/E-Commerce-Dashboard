@@ -7,8 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ================== USERS & ROLES ==================
-
+// ================== USERS ==================
 model User {
   id            String         @id @default(uuid())
   name          String
@@ -29,7 +28,6 @@ model User {
   @@map("users")
 }
 
-// Storing refresh tokens as their own table (better than a raw array/JSON column)
 model RefreshToken {
   id        String   @id @default(uuid())
   token     String   @unique
@@ -41,6 +39,7 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+// ================== ROLES ==================
 model Role {
   id          String           @id @default(uuid())
   name        String           @unique
@@ -67,7 +66,7 @@ model PermissionGroup {
 
 model Permission {
   id            String           @id @default(uuid())
-  name          String           @unique // e.g. "product:create"
+  name          String           @unique
   description   String?
   parentGroupId String?
   parentGroup   PermissionGroup? @relation(fields: [parentGroupId], references: [id])
@@ -76,7 +75,6 @@ model Permission {
   @@map("permissions")
 }
 
-// Join table between Role and Permission (many-to-many)
 model RolePermission {
   roleId       String
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
@@ -95,7 +93,7 @@ model Media {
   storedPath String
   publicUrl  String
   mimeType   String
-  type       String // e.g. "image", "video", "document"
+  type       String // "image" | "video"
   size       Int
   width      Int?
   height     Int?
@@ -106,9 +104,11 @@ model Media {
   uploadedById String?
   uploadedBy   User?   @relation("UploadedMedia", fields: [uploadedById], references: [id])
 
-  usedAsAvatarBy User[]     @relation("UserAvatar")
-  categories     Category[] @relation("CategoryImage")
-  brands         Brand[]    @relation("BrandLogo")
+  usedAsAvatarBy     User[]           @relation("UserAvatar")
+  categories         Category[]       @relation("CategoryImage")
+  brands             Brand[]          @relation("BrandLogo")
+  productAttachments ProductMedia[]
+  attributeValueRefs AttributeValue[] @relation("AttributeValueReferenceMedia")
 
   createdAt DateTime @default(now())
 
@@ -132,11 +132,10 @@ model Category {
   activeFlag Boolean @default(true)
   sortOrder  Int     @default(0)
 
-  products Product[]
+  products ProductCategory[] // many-to-many via join table only — no direct Product relation
 
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  productCategories ProductCategory[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("categories")
 }
@@ -145,7 +144,7 @@ model Category {
 
 model Brand {
   id          String    @id @default(uuid())
-  name        String    @unique // <-- add this
+  name        String    @unique
   slug        String    @unique
   logoId      String?
   logo        Media?    @relation("BrandLogo", fields: [logoId], references: [id])
@@ -161,62 +160,69 @@ model Brand {
 
 // ================== ATTRIBUTES ==================
 
-// e.g. Attribute = "Color", "Size"
 model Attribute {
   id     String           @id @default(uuid())
   name   String           @unique
   slug   String           @unique
-  type   String // e.g. "text", "color", "number"
+  type   String // 'dropdown' | 'radio' | 'checkbox' | 'colour_swatch' | 'image_swatch'
   values AttributeValue[]
 
   @@map("attributes")
 }
 
-// e.g. AttributeValue = "Red", "Blue" (belongs to "Color")
 model AttributeValue {
-  id          String    @id @default(uuid())
-  value       String // e.g. "Red"
+  id               String  @id @default(uuid())
+  value            String
+  slug             String
+  referenceValue   String? // hex code, used when attribute type = colour_swatch
+  referenceMediaId String? // media reference, used when attribute type = image_swatch
+  referenceMedia   Media?  @relation("AttributeValueReferenceMedia", fields: [referenceMediaId], references: [id])
+
   attributeId String
   attribute   Attribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
 
-  variants ProductVariantAttribute[]
+  variants      ProductVariantAttribute[]
+  attachedMedia ProductMedia[]            @relation("AttributeValueMedia")
 
+  @@unique([attributeId, value]) // unique within its own attribute
   @@map("attribute_values")
 }
 
 // ================== PRODUCT ==================
 
 model Product {
-  id          String  @id @default(uuid())
-  name        String
-  slug        String  @unique
-  description String?
+  id               String  @id @default(uuid())
+  name             String
+  slug             String  @unique
+  shortDescription String?
+  longDescription  String?
 
   hasVariants Boolean @default(false)
 
-  // Only used when hasVariants = false
-  price     Decimal? @db.Decimal(10, 2)
-  salePrice Decimal? @db.Decimal(10, 2)
-  stock     Int?
-  sku       String?  @unique
+  sku         String?  @unique
+  price       Decimal? @db.Decimal(10, 2)
+  salePrice   Decimal? @db.Decimal(10, 2)
+  stock       Int?
+  stockStatus String? // "in_stock" | "low_stock" | "out_of_stock"
+
+  weight       Decimal? @db.Decimal(10, 2)
+  activeFlag   Boolean  @default(true)
+  featuredFlag Boolean  @default(false)
+  sortOrder    Int      @default(0)
 
   brandId String?
   brand   Brand?  @relation(fields: [brandId], references: [id])
 
-  categories ProductCategory[]
+  categories ProductCategory[] // many-to-many, no direct categoryId
   media      ProductMedia[]
   variants   ProductVariant[]
 
-  status     Boolean   @default(true)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  category   Category? @relation(fields: [categoryId], references: [id])
-  categoryId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("products")
 }
 
-// A product can belong to multiple categories (many-to-many)
 model ProductCategory {
   productId  String
   product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -227,31 +233,45 @@ model ProductCategory {
   @@map("product_categories")
 }
 
-// Product-level media (separate from variant-level media)
+// Polymorphic-style attachment: exactly one of productId / variantId / attributeValueId is set.
 model ProductMedia {
-  id          String  @id @default(uuid())
-  productId   String
-  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  mediaId     String
+  id      String @id @default(uuid())
+  mediaId String
+  media   Media  @relation(fields: [mediaId], references: [id])
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  attributeValueId String?
+  attributeValue   AttributeValue? @relation("AttributeValueMedia", fields: [attributeValueId], references: [id], onDelete: Cascade)
+
   isThumbnail Boolean @default(false)
+  isGallery   Boolean @default(true)
   sortOrder   Int     @default(0)
 
   @@map("product_media")
 }
 
-// Each product can have multiple variants (e.g. Red/Large, Blue/Small)
 model ProductVariant {
   id        String  @id @default(uuid())
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  sku       String   @unique
-  price     Decimal  @db.Decimal(10, 2)
-  salePrice Decimal? @db.Decimal(10, 2)
-  stock     Int      @default(0)
+  sku         String   @unique
+  price       Decimal  @db.Decimal(10, 2)
+  salePrice   Decimal? @db.Decimal(10, 2)
+  stock       Int      @default(0)
+  stockStatus String?
+
+  lowStockThreshold Int?     @default(5)
+  weight            Decimal? @db.Decimal(10, 2)
+  activeFlag        Boolean  @default(true)
 
   attributes ProductVariantAttribute[]
-  media      ProductVariantMedia[]
+  media      ProductMedia[] // polymorphic — via ProductMedia.variantId, no separate join table
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -259,7 +279,6 @@ model ProductVariant {
   @@map("product_variants")
 }
 
-// Join table: which attribute values belong to which variant
 model ProductVariantAttribute {
   variantId        String
   variant          ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
@@ -268,15 +287,4 @@ model ProductVariantAttribute {
 
   @@id([variantId, attributeValueId])
   @@map("product_variant_attributes")
-}
-
-// Join table: which media/images belong to which variant
-model ProductVariantMedia {
-  variantId String
-  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  mediaId   String
-  sortOrder Int            @default(0)
-
-  @@id([variantId, mediaId])
-  @@map("product_variant_media")
 }

@@ -1,5 +1,13 @@
 // src/modules/attribute/attribute.controller.ts
-import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+} from '@nestjs/common';
 import { AttributeService } from './attribute.service';
 import { CreateAttributeDto } from './dto/create-attribute.dto';
 import { UpdateAttributeDto } from './dto/update-attribute.dto';
@@ -29,9 +37,12 @@ export class AttributeController {
   }
 
   @RequirePermission('attribute:update')
-  @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateAttributeDto) {
-    return this.attributeService.update(id, dto);
+  @Put('values/:valueId')
+  updateValue(
+    @Param('valueId') valueId: string,
+    @Body() dto: CreateAttributeValueDto,
+  ) {
+    return this.attributeService.updateValue(valueId, dto);
   }
 
   @RequirePermission('attribute:delete')

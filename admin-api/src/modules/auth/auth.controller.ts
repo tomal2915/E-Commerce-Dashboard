@@ -66,6 +66,13 @@ export class AuthController {
     return { accessToken };
   }
 
+  // Primary route used by the frontend's AuthContext to restore/check the session
+  @Get('session')
+  async session(@Req() req: Request) {
+    return this.authService.getMe((req as any).user.id);
+  }
+
+  // Kept as an alias for backward compatibility with anything still calling /auth/me
   @Get('me')
   async me(@Req() req: Request) {
     return this.authService.getMe((req as any).user.id);

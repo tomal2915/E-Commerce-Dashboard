@@ -1,6 +1,6 @@
 // src/modules/product/dto/product-query.dto.ts
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class ProductQueryDto {
   @IsOptional()
@@ -26,4 +26,16 @@ export class ProductQueryDto {
   @IsOptional()
   @IsString()
   brandId?: string;
+
+  @IsOptional()
+  @IsIn(['active', 'inactive'])
+  status?: string;
+
+  @IsOptional()
+  @IsIn(['name', 'createdAt', 'sortOrder'])
+  sortBy?: string;
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortDir?: string;
 }

@@ -42,6 +42,22 @@ export function MediaPicker({ onSelect, onClose }: MediaPickerProps) {
     }
   }
 
+  /**
+   * Safe helper to normalize local asset routing strings into real destination URLs.
+   * Strips any trailing slashes from your base URL and maps relative paths securely.
+   */
+  function resolveAssetUrl(path: string | null): string {
+    if (!path) return "";
+    if (path.startsWith("http://") || path.startsWith("https://")) {
+      return path;
+    }
+    // Pull the active api endpoint host from your existing Axios setup
+    const baseUrl =
+      api.defaults.baseURL?.replace(/\/api\/v1\/?$/, "") ||
+      "http://localhost:3001";
+    return `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col p-4">
@@ -69,7 +85,7 @@ export function MediaPicker({ onSelect, onClose }: MediaPickerProps) {
               className="aspect-square rounded-lg overflow-hidden border border-slate-200 hover:ring-2 hover:ring-slate-900"
             >
               <img
-                src={item.thumbnail ?? item.publicUrl}
+                src={resolveAssetUrl(item.thumbnail ?? item.publicUrl)}
                 alt={item.fileName}
                 className="w-full h-full object-cover"
               />

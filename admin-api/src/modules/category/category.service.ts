@@ -111,14 +111,18 @@ export class CategoryService {
   async remove(id: string) {
     await this.findOne(id);
 
-    const childCount = await this.prisma.category.count({ where: { parentId: id } });
+    const childCount = await this.prisma.category.count({
+      where: { parentId: id },
+    });
     if (childCount > 0) {
       throw new ConflictException(
         'Cannot delete a category that has subcategories. Delete or move them first.',
       );
     }
 
-    const productCount = await this.prisma.product.count({ where: { categoryId: id } });
+    const productCount = await this.prisma.product.count({
+      where: { categories: { some: { categoryId: id } } },
+    });
     if (productCount > 0) {
       throw new ConflictException(
         'Cannot delete a category that has products assigned to it.',
@@ -132,8 +136,11 @@ export class CategoryService {
   // ---------- Helpers ----------
 
   private async assertParentExists(parentId: string) {
-    const parent = await this.prisma.category.findUnique({ where: { id: parentId } });
-    if (!parent) throw new BadRequestException('Parent category does not exist');
+    const parent = await this.prisma.category.findUnique({
+      where: { id: parentId },
+    });
+    if (!parent)
+      throw new BadRequestException('Parent category does not exist');
   }
 
   /**
@@ -141,7 +148,10 @@ export class CategoryService {
    * ever reaches `categoryId`. If it does, assigning that parent would
    * create a circular reference.
    */
-  private async assertNotDescendant(categoryId: string, proposedParentId: string) {
+  private async assertNotDescendant(
+    categoryId: string,
+    proposedParentId: string,
+  ) {
     let currentId: string | null = proposedParentId;
 
     while (currentId) {
@@ -159,14 +169,19 @@ export class CategoryService {
     }
   }
 
-  private async generateUniqueSlug(name: string, excludeId?: string): Promise<string> {
+  private async generateUniqueSlug(
+    name: string,
+    excludeId?: string,
+  ): Promise<string> {
     const baseSlug = slugify(name, { lower: true, strict: true });
     let slug = baseSlug;
     let counter = 1;
 
     // Keep trying "name", "name-1", "name-2"... until we find one that's free
     while (true) {
-      const existing = await this.prisma.category.findUnique({ where: { slug } });
+      const existing = await this.prisma.category.findUnique({
+        where: { slug },
+      });
       if (!existing || existing.id === excludeId) {
         return slug;
       }

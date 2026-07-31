@@ -1,5 +1,9 @@
 // src/modules/permission/permission.service.ts
-import { Injectable, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePermissionGroupDto } from './dto/create-permission-group.dto';
 
@@ -64,6 +68,32 @@ export class PermissionService {
       include: { permissions: true },
       orderBy: { name: 'asc' },
     });
+  }
+
+  /**
+   * Deletes a single permission by its unique ID.
+   * Associated rows in the RolePermission table cascade automatically in the database.
+   */
+  async remove(id: string) {
+    const permission = await this.prisma.permission.findUnique({
+      where: { id },
+    });
+    if (!permission) throw new NotFoundException('Permission not found');
+    // RolePermission rows cascade automatically (onDelete: Cascade in schema)
+    await this.prisma.permission.delete({ where: { id } });
+    return { message: 'Permission deleted successfully' };
+  }
+
+  async removeGroup(id: string) {
+    const group = await this.prisma.permissionGroup.findUnique({
+      where: { id },
+    });
+    if (!group) throw new NotFoundException('Permission group not found');
+    // Deletes the group and, via the Permission FK relation, all its permissions
+    // (and their RolePermission links) cascade too.
+    await this.prisma.permission.deleteMany({ where: { parentGroupId: id } });
+    await this.prisma.permissionGroup.delete({ where: { id } });
+    return { message: 'Permission group deleted successfully' };
   }
 
   /**

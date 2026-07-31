@@ -11,12 +11,12 @@ async function bootstrap() {
 
   app.use(cookieParser());
   app.enableCors({ origin: 'http://localhost:3001', credentials: true });
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), { prefix: '/uploads' });
 
-  // Global validation pipe:
-  // - whitelist: strips properties not defined in the DTO
-  // - transform: actually applies @Type() conversions (string -> number, etc.)
-  // - forbidNonWhitelisted: rejects requests with unexpected extra fields
+  // process.cwd() = wherever `npm run start:dev` was executed from
+  // (your project root), regardless of dist/ output structure — more
+  // reliable than __dirname across ts-node watch mode vs. compiled builds.
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

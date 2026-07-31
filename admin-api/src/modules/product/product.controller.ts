@@ -1,10 +1,17 @@
 // src/modules/product/product.controller.ts
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { RequirePermission } from '../../common/decorators/permissions.decorator';
-import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('products')
 export class ProductController {
@@ -16,16 +23,21 @@ export class ProductController {
     return this.productService.create(dto);
   }
 
-  // Public: product listing is usually shown on a storefront too
-  @Public()
+  @RequirePermission('product:watch')
   @Get()
   findAll(@Query() query: ProductQueryDto) {
     return this.productService.findAll(query);
   }
 
-  @Public()
+  @RequirePermission('product:read')
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.productService.findOne(id);
+  }
+
+  @RequirePermission('product:delete')
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.productService.remove(id);
   }
 }

@@ -23,6 +23,24 @@ class ProductMediaInputDto {
   isThumbnail?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  isGallery?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number;
+}
+
+class VariantMediaInputDto {
+  @IsString()
+  @IsNotEmpty()
+  mediaId: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isThumbnail?: boolean;
+
+  @IsOptional()
   @IsInt()
   sortOrder?: number;
 }
@@ -43,10 +61,28 @@ class VariantInputDto {
   @Min(0)
   stock: number;
 
-  // Which attribute values this variant represents, e.g. [redValueId, largeValueId]
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  lowStockThreshold?: number;
+
+  @IsOptional()
+  @IsDecimal()
+  weight?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  activeFlag?: boolean;
+
   @IsArray()
   @IsString({ each: true })
   attributeValueIds: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => VariantMediaInputDto)
+  media?: VariantMediaInputDto[];
 }
 
 export class CreateProductDto {
@@ -56,12 +92,15 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
-  description?: string;
+  shortDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  longDescription?: string;
 
   @IsBoolean()
   hasVariants: boolean;
 
-  // ---- Simple product fields: required only when hasVariants = false ----
   @ValidateIf((dto) => dto.hasVariants === false)
   @IsDecimal()
   price?: string;
@@ -81,14 +120,28 @@ export class CreateProductDto {
   @IsNotEmpty()
   sku?: string;
 
-  // ---- Variable product fields: required only when hasVariants = true ----
   @ValidateIf((dto) => dto.hasVariants === true)
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => VariantInputDto)
   variants?: VariantInputDto[];
 
-  // ---- Shared fields ----
+  @IsOptional()
+  @IsDecimal()
+  weight?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  activeFlag?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  featuredFlag?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number;
+
   @IsOptional()
   @IsString()
   brandId?: string;
@@ -102,4 +155,10 @@ export class CreateProductDto {
   @ValidateNested({ each: true })
   @Type(() => ProductMediaInputDto)
   media?: ProductMediaInputDto[];
+
+  // Media attached directly to an attribute value (e.g. "Red" swatch photos),
+  // shared across every variant that uses that value — set once here.
+  @IsOptional()
+  @IsArray()
+  attributeValueMedia?: { attributeValueId: string; mediaId: string }[];
 }
