@@ -148,7 +148,7 @@ function CategoryFormModal({
   const { toast } = useToast();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [parentId, setParentId] = useState<string | null>("");
+  const [parentId, setParentId] = useState<string | null>(null);
   const [activeFlag, setActiveFlag] = useState(true);
   const [sortOrder, setSortOrder] = useState(0);
   const [allCategories, setAllCategories] = useState<CategoryOption[]>([]);
