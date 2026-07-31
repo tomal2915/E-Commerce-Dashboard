@@ -219,7 +219,10 @@ function CategoryFormModal({
           </div>
           <div className="space-y-1.5">
             <Label>Parent Category</Label>
-            <Select value={parentId} onValueChange={setParentId}>
+            <Select
+              value={parentId || ""}
+              onValueChange={(value) => setParentId(value || "")}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="None (top-level)" />
               </SelectTrigger>

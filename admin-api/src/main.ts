@@ -10,7 +10,13 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.use(cookieParser());
-  app.enableCors({ origin: 'http://localhost:3001', credentials: true });
+  app.enableCors({
+    origin: [
+      'http://localhost:3001',
+      'https://e-commerce-backend-prisma-svit.vercel.app',
+    ],
+    credentials: true,
+  });
 
   // process.cwd() = wherever `npm run start:dev` was executed from
   // (your project root), regardless of dist/ output structure — more
