@@ -460,8 +460,7 @@ export default function NewProductPage() {
         <div>
           <Label className="mb-2 block">Product Gallery</Label>
           <p className="text-xs text-muted-foreground mb-3">
-            The first image sets initial order — use arrows to reorder, and "Set
-            as thumbnail" to choose the main listing image.
+            The first image sets initial order — use arrows to reorder, and "Set as thumbnail" to choose the main listing image.
           </p>
           <div className="flex flex-wrap gap-3 mb-3">
             {selectedMedia.map((m, index) => (
