@@ -3,15 +3,17 @@
 "use client";
 
 import * as React from "react";
-import { Toast as ToastPrimitive } from "@base-ui/react/toast";
 
 type ToastActionElement = React.ReactElement;
-type ToastProps = ToastPrimitive.Root.Props;
 
 const TOAST_LIMIT = 1;
 const TOAST_REMOVE_DELAY = 1000000;
 
-type ToasterToast = Omit<ToastProps, "onOpenChange"> & {
+// Plain, standalone shape for our own reducer state.
+// Deliberately NOT derived from ToastPrimitive.Root.Props (base-ui) —
+// that type describes props for rendering a single toast item and
+// requires its own `toast` object, which doesn't apply here.
+type ToasterToast = {
   id: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
