@@ -1,4 +1,5 @@
 // src/modules/media/media.service.ts
+
 import {
   Injectable,
   NotFoundException,
@@ -10,8 +11,8 @@ import * as fs from 'fs/promises';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateMediaDto } from './dto/update-media.dto';
 import { MediaQueryDto } from './dto/media-query.dto';
+import { ALLOWED_MIME_TYPES } from './media.multer.config';
 
-// const THUMBNAIL_DIR = join(process.cwd(), 'uploads', 'media', 'thumbnails');
 const THUMBNAIL_DIR = path.join(
   process.cwd(),
   'uploads',
@@ -31,6 +32,22 @@ export class MediaService {
   async uploadFile(file: Express.Multer.File, uploadedById: string) {
     if (!file) {
       throw new BadRequestException('No file was uploaded');
+    }
+
+    // ---- SECURITY CHECK: verify the REAL file type from its bytes ----
+    // The client-supplied mimetype (checked in multerConfig.fileFilter) can
+    // be spoofed trivially — this reads the file's actual magic number/
+    // signature from disk, which cannot be faked by renaming an extension
+    // or lying about Content-Type in the multipart request.
+    const { fileTypeFromFile } = await import('file-type');
+    const detectedType = await fileTypeFromFile(file.path);
+
+    if (!detectedType || !ALLOWED_MIME_TYPES.includes(detectedType.mime)) {
+      // Reject and clean up immediately — never leave a disguised file on disk.
+      await fs.unlink(file.path).catch(() => {});
+      throw new BadRequestException(
+        `File content does not match an allowed image type. Detected: ${detectedType?.mime ?? 'unknown'}`,
+      );
     }
 
     // Step 1: Read image dimensions (width/height) using sharp
@@ -59,13 +76,14 @@ export class MediaService {
       throw new BadRequestException('Uploaded file is not a valid image');
     }
 
-    // Step 3: Store all metadata in the database
+    // Step 3: Store all metadata in the database — use the REAL detected
+    // mimeType, not the client-supplied one, since we now know it's accurate.
     const media = await this.prisma.media.create({
       data: {
         fileName: file.originalname,
         storedPath: file.path,
         publicUrl: `/uploads/media/${file.filename}`,
-        mimeType: file.mimetype,
+        mimeType: detectedType.mime,
         type: 'image',
         size: file.size,
         width,
@@ -147,7 +165,13 @@ export class MediaService {
 
     await fs.unlink(media.storedPath).catch(() => {});
     if (media.thumbnail) {
-      const thumbnailFsPath = media.thumbnail.replace('/uploads', './uploads');
+      // FIX: thumbnail path was built with process.cwd() (via THUMBNAIL_DIR),
+      // but this used to strip '/uploads' assuming a relative './uploads'
+      // base — that mismatch meant thumbnails were never actually deleted.
+      // media.thumbnail is stored as "/uploads/media/thumbnails/thumb-x.png";
+      // strip the leading "/uploads" and join onto process.cwd()/uploads.
+      const relativePath = media.thumbnail.replace(/^\/uploads/, '');
+      const thumbnailFsPath = path.join(process.cwd(), 'uploads', relativePath);
       await fs.unlink(thumbnailFsPath).catch(() => {});
     }
 
