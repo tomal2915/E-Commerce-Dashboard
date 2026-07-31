@@ -162,7 +162,7 @@ function CategoryFormModal({
     setActiveFlag(category?.activeFlag ?? true);
     setSortOrder(category?.sortOrder ?? 0);
     setDescription("");
-    setParentId("");
+    setParentId(null);
     setError("");
   }, [open, category]);
 
