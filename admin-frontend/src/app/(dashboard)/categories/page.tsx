@@ -50,6 +50,7 @@ export default function CategoriesPage() {
     null,
   );
   const { toast } = useToast();
+  const [parentId, setParentId] = useState<string | null>("");
 
   async function loadTree() {
     setError("");
@@ -219,10 +220,7 @@ function CategoryFormModal({
           </div>
           <div className="space-y-1.5">
             <Label>Parent Category</Label>
-            <Select
-              value={parentId || ""}
-              onValueChange={(value) => setParentId(value || "")}
-            >
+            <Select value={parentId} onValueChange={setParentId}>
               <SelectTrigger>
                 <SelectValue placeholder="None (top-level)" />
               </SelectTrigger>
