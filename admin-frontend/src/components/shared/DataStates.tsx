@@ -1,7 +1,17 @@
 // src/components/shared/DataStates.tsx
 'use client';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+
+export function LoadingState({ message = 'Loading...' }: { message?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen gap-3">
+      <div className="h-8 w-8 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
+      <p className="text-sm text-muted-foreground">{message}</p>
+    </div>
+  );
+}
 
 export function TableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
