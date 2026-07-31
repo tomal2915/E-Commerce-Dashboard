@@ -53,7 +53,7 @@ async function main() {
           parentGroupId: group.id,
         },
       });
-      permissionMap.set(permissionName, permission.id);
+      permissionMap.set(permissionName, permission.id)
     }
   }
   console.log(`Seeded ${permissionMap.size} permissions.`);
