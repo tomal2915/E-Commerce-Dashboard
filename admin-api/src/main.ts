@@ -13,7 +13,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:3001',
-      'https://e-commerce-backend-prisma-svit.vercel.app',
+      'https://e-commerce-dashboard-eight-xi.vercel.app',
     ],
     credentials: true,
   });
