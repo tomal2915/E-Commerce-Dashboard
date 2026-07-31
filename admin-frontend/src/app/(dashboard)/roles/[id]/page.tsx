@@ -120,7 +120,10 @@ export default function RoleEditorPage({
             </div>
             <div className="space-y-1.5">
               <Label>Status</Label>
-              <Select value={status} onValueChange={setStatus}>
+              <Select
+                value={status}
+                onValueChange={(value) => setStatus(value ?? "active")}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
