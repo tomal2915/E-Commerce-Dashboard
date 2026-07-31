@@ -23,7 +23,7 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
-        <LoadingState label="Loading your session..." />
+        <LoadingState message ="Loading your session..." />
       </div>
     );
   }
