@@ -88,14 +88,14 @@ export default function NewProductPage() {
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
-  const [brandId, setBrandId] = useState("");
+  const [brandId, setBrandId] = useState<string | null>(null);
   const [categoryIds, setCategoryIds] = useState<Set<string>>(new Set());
 
   const [selectedMedia, setSelectedMedia] = useState<SelectedMedia[]>([]);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   const [attributes, setAttributes] = useState<Attribute[]>([]);
-  const [selectedValuesByAttribute, setSelectedValuesByAttribute] = useState<
+  const [selectedValuesByAttribute, setSelectedValuesByAttribute] = useState
     Record<string, AttributeValueOption[]>
   >({});
   const [variants, setVariants] = useState<VariantDraft[]>([]);
@@ -105,16 +105,6 @@ export default function NewProductPage() {
     api.get("/categories").then((res) => setCategories(res.data.data));
     api.get("/attributes").then((res) => setAttributes(res.data.data));
   }, []);
-
-  //   useEffect(() => {
-  //     api
-  //       .get("/attributes")
-  //       .then((res) => {
-  //         console.log("attributes response:", res.data);
-  //         setAttributes(res.data.data);
-  //       })
-  //       .catch((err) => console.error("attributes fetch failed:", err));
-  //   }, []);
 
   useEffect(() => {
     if (!editingId) return;
@@ -131,7 +121,7 @@ export default function NewProductPage() {
         setPrice(p.price ?? "");
         setSalePrice(p.salePrice ?? "");
         setStock(p.stock ?? 0);
-        setBrandId(p.brand?.id ?? "");
+        setBrandId(p.brand?.id ?? null);
         setCategoryIds(new Set(p.categories.map((c: any) => c.category.id)));
         setSelectedMedia(
           p.media.map((m: any) => ({
@@ -186,7 +176,6 @@ export default function NewProductPage() {
   }
 
   function handleGenerateCombinations() {
-    console.log("Generate Combinations button clicked");
     const combinations = generateCombinations(selectedValuesByAttribute);
     const newVariants: VariantDraft[] = combinations.map((combo) => {
       const key = combo
@@ -426,10 +415,7 @@ export default function NewProductPage() {
         <div className="space-y-6">
           <div className="space-y-1.5">
             <Label>Brand</Label>
-            <Select
-              value={brandId}
-              onValueChange={(value) => setBrandId(value ?? "")}
-            >
+            <Select value={brandId ?? ""} onValueChange={setBrandId}>
               <SelectTrigger className="max-w-sm">
                 <SelectValue placeholder="No brand" />
               </SelectTrigger>
