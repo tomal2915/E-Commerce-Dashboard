@@ -42,6 +42,7 @@ export class CsrfMiddleware implements NestMiddleware {
     // a request that includes cookies automatically, but it CANNOT read this
     // cookie's value (blocked by browser same-origin policy) to also set the
     // matching header — so a forged request will always be missing a valid header.
+    console.log('[CSRF]', req.method, req.path);
     let csrfToken = req.cookies?.[CSRF_COOKIE_NAME];
     if (!csrfToken) {
       csrfToken = generateToken();
