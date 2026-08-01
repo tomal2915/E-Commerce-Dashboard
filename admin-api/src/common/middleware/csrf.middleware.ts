@@ -35,33 +35,30 @@ function safeCompare(a: string, b: string): boolean {
 @Injectable()
 export class CsrfMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
-    // ---- Step 1: Ensure every client has a CSRF cookie ----
-    // Issued on first contact. NOT httpOnly — the frontend's JS must be able
-    // to read it and echo it back in a custom header. This is the core of
-    // the double-submit pattern: an attacker's cross-origin page can trigger
-    // a request that includes cookies automatically, but it CANNOT read this
-    // cookie's value (blocked by browser same-origin policy) to also set the
-    // matching header — so a forged request will always be missing a valid header.
-    console.log('[CSRF]', req.method, req.path);
+    const actualPath = req.originalUrl.split('?')[0];
+
+    console.log(
+      '[CSRF]',
+      req.method,
+      actualPath,
+      '(req.path was:',
+      req.path,
+      ')',
+    );
+
     let csrfToken = req.cookies?.[CSRF_COOKIE_NAME];
     if (!csrfToken) {
       csrfToken = generateToken();
       res.cookie(CSRF_COOKIE_NAME, csrfToken, {
         httpOnly: false,
         secure: IS_PROD,
-        // 'none' is required for the cookie to survive a cross-site request
-        // (Vercel frontend -> Render backend are different registrable
-        // domains). 'none' requires secure:true, which is why both flip
-        // together on IS_PROD. Locally, frontend/backend are treated as
-        // same-site by the browser, so 'lax' is enough and avoids needing
-        // HTTPS in dev.
         sameSite: IS_PROD ? 'none' : 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // matches refresh token lifetime
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
       req.cookies[CSRF_COOKIE_NAME] = csrfToken;
     }
 
-    const normalizedPath = req.path.replace(/\/+$/, '');
+    const normalizedPath = actualPath.replace(/\/+$/, '');
     const isExempt = CSRF_EXEMPT_PATHS.some(
       (path) => normalizedPath === path || normalizedPath.startsWith(`${path}`),
     );
@@ -71,10 +68,6 @@ export class CsrfMiddleware implements NestMiddleware {
       return next();
     }
 
-    // ---- Step 2: Defense-in-depth — verify Origin/Referer matches our own host ----
-    // Even before checking the token, reject requests whose Origin header
-    // doesn't match where this API is actually hosted. Browsers set Origin
-    // reliably and it cannot be spoofed by JavaScript running on another site.
     const origin = req.headers.origin ?? req.headers.referer;
     const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? '')
       .split(',')
@@ -90,7 +83,6 @@ export class CsrfMiddleware implements NestMiddleware {
       }
     }
 
-    // ---- Step 3: Double-submit token check ----
     const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
     const headerToken = req.headers[CSRF_HEADER_NAME] as string | undefined;
 
