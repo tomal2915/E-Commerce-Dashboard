@@ -1,11 +1,17 @@
 // src/app.module.ts
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionGuard } from './common/guards/permission.guard';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { CsrfMiddleware } from './common/middleware/csrf.middleware';
+import { CsrfController } from './common/controllers/csrf.controller';
+
 import { AuthController } from './modules/auth.controller';
 import { AuthService } from './modules/auth.service';
 import { UserController } from './modules/user.controller';
@@ -35,15 +41,11 @@ import { AttributeService } from './modules/attribute.service';
 import { ProductModule } from './modules/product/product.module';
 import { ProductController } from './modules/product.controller';
 import { ProductService } from './modules/product.service';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
 
 @Module({
   imports: [
     ServeStaticModule.forRoot({
-      // Path to your root uploads folder on your hard drive
       rootPath: join(__dirname, '..', 'uploads'),
-      // The prefix matches the inbound URL request pattern
       serveRoot: '/uploads',
       exclude: ['/api/(.*)'],
     }),
@@ -64,7 +66,6 @@ import { join } from 'path';
     ProductModule,
   ],
   providers: [
-    // Order matters: JwtAuthGuard runs first, then PermissionGuard
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
@@ -90,6 +91,13 @@ import { join } from 'path';
     BrandController,
     AttributeController,
     ProductController,
+    CsrfController, // new: exposes GET /csrf/token
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    // Runs before every route, including guards — issues the CSRF cookie
+    // on first contact and validates it on every state-changing request.
+    consumer.apply(CsrfMiddleware).forRoutes('*');
+  }
+}

@@ -13,8 +13,23 @@ export const setAccessToken = (t: string | null) => {
 };
 export const getAccessToken = () => accessToken;
 
+// Reads the CSRF cookie (readable — not httpOnly by design, so the SPA
+// can echo it back). Attached on every state-changing request as the
+// double-submit header the backend's CsrfMiddleware verifies.
+function getCsrfTokenFromCookie(): string | null {
+  const match = document.cookie.match(/csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 api.interceptors.request.use((config) => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+
+  const method = (config.method ?? "").toLowerCase();
+  if (["post", "put", "patch", "delete"].includes(method)) {
+    const csrfToken = getCsrfTokenFromCookie();
+    if (csrfToken) config.headers["x-csrf-token"] = csrfToken;
+  }
+
   return config;
 });
 
@@ -31,10 +46,6 @@ function isAuthExempt(url?: string) {
   return AUTH_EXEMPT_PATHS.some((path) => url.includes(path));
 }
 
-// ---- Single in-flight refresh guard ----
-// refreshPromise holds the ONE active refresh call. Every 401 that arrives
-// while a refresh is already running awaits this same promise instead of
-// firing its own /auth/refresh request.
 let refreshPromise: Promise<string> | null = null;
 
 async function refreshAccessToken(): Promise<string> {
@@ -47,7 +58,7 @@ async function refreshAccessToken(): Promise<string> {
         return token;
       })
       .finally(() => {
-        refreshPromise = null; // release the guard once settled (success or fail)
+        refreshPromise = null;
       });
   }
   return refreshPromise;
@@ -91,8 +102,6 @@ api.interceptors.response.use(
       }
     }
 
-    // 401 from /auth/refresh (or /auth/login) itself: no retry, just
-    // propagate so the caller's own catch block (e.g. restoreSession) runs.
     if (error.response?.status === 401 && isRefreshOrLoginCall) {
       setAccessToken(null);
     }
