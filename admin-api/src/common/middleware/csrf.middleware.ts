@@ -61,8 +61,9 @@ export class CsrfMiddleware implements NestMiddleware {
       req.cookies[CSRF_COOKIE_NAME] = csrfToken;
     }
 
-    const isExempt = CSRF_EXEMPT_PATHS.some((path) =>
-      req.path.startsWith(path),
+    const normalizedPath = req.path.replace(/\/+$/, '');
+    const isExempt = CSRF_EXEMPT_PATHS.some(
+      (path) => normalizedPath === path || normalizedPath.startsWith(`${path}`),
     );
     const needsCheck = PROTECTED_METHODS.includes(req.method) && !isExempt;
 
