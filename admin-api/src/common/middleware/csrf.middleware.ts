@@ -17,6 +17,8 @@ const PROTECTED_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 //   in-memory CSRF handling yet, but already has cookies from a prior session
 const CSRF_EXEMPT_PATHS = ['/auth/login', '/auth/refresh'];
 
+const IS_PROD = process.env.NODE_ENV === 'production';
+
 function generateToken(): string {
   return randomBytes(32).toString('hex');
 }
@@ -45,8 +47,14 @@ export class CsrfMiddleware implements NestMiddleware {
       csrfToken = generateToken();
       res.cookie(CSRF_COOKIE_NAME, csrfToken, {
         httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        secure: IS_PROD,
+        // 'none' is required for the cookie to survive a cross-site request
+        // (Vercel frontend -> Render backend are different registrable
+        // domains). 'none' requires secure:true, which is why both flip
+        // together on IS_PROD. Locally, frontend/backend are treated as
+        // same-site by the browser, so 'lax' is enough and avoids needing
+        // HTTPS in dev.
+        sameSite: IS_PROD ? 'none' : 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000, // matches refresh token lifetime
       });
       req.cookies[CSRF_COOKIE_NAME] = csrfToken;
