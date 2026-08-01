@@ -11,10 +11,20 @@ async function bootstrap() {
 
   app.use(cookieParser());
   app.enableCors({
-    origin: [
-      'http://localhost:3001',
-      'https://e-commerce-dashboard-eight-xi.vercel.app',
-    ],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true); // same-origin / server-to-server / curl
+      const allowed = [
+        'http://localhost:3001',
+        'https://e-commerce-dashboard-eight-xi.vercel.app',
+        'https://e-commerce-dashboard-tomal-s-projects.vercel.app',
+      ];
+      const isVercelPreview =
+        /^https:\/\/e-commerce-dashboard-.*\.vercel\.app$/.test(origin);
+      if (allowed.includes(origin) || isVercelPreview) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
   });
 
