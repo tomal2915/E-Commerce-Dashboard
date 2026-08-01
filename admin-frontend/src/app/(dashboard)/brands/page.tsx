@@ -113,6 +113,7 @@ export default function BrandsPage() {
         <Select
           value={statusFilter}
           onValueChange={(v) => {
+            if (v === null) return;
             setStatusFilter(v);
             setPage(1);
           }}
