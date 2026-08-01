@@ -144,6 +144,7 @@ export default function UsersPage() {
           <Select
             value={roleFilter}
             onValueChange={(v) => {
+              if (v === null) return;
               setRoleFilter(v);
               setPage(1);
             }}
@@ -163,6 +164,24 @@ export default function UsersPage() {
           <Select
             value={statusFilter}
             onValueChange={(v) => {
+              if (v === null) return;
+              setStatusFilter(v);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="true">Active</SelectItem>
+              <SelectItem value="false">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => {
+              if (v === null) return;
               setStatusFilter(v);
               setPage(1);
             }}
