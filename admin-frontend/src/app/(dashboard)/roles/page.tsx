@@ -37,7 +37,7 @@ import {
 
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[] | null>(null);
-  const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
+  const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1, limit: 10 });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
