@@ -1,4 +1,5 @@
 // src/modules/brand/brand.service.ts
+
 import {
   Injectable,
   ConflictException,
@@ -10,12 +11,12 @@ import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { BrandQueryDto } from './dto/brand-query.dto';
 
-interface FindAllQuery {
-  search?: string;
-  status?: string;
-  page?: number;
-  limit?: number;
-}
+// interface FindAllQuery {
+//   search?: string;
+//   status?: string;
+//   page?: number;
+//   limit?: number;
+// }
 
 @Injectable()
 export class BrandService {
@@ -37,16 +38,30 @@ export class BrandService {
   }
 
   async findAll(query: BrandQueryDto) {
-    return this.prisma.brand.findMany({
-      where: {
-        name: query.search
-          ? { contains: query.search, mode: 'insensitive' }
-          : undefined,
-        status:
-          query.status !== undefined ? query.status === 'true' : undefined,
-      },
-      orderBy: { name: 'asc' },
-    });
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+
+    const where = {
+      name: query.search
+        ? { contains: query.search, mode: 'insensitive' as const }
+        : undefined,
+      status: query.status !== undefined ? query.status === 'true' : undefined,
+    };
+
+    const [total, brands] = await this.prisma.$transaction([
+      this.prisma.brand.count({ where }),
+      this.prisma.brand.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      data: brands,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(id: string) {

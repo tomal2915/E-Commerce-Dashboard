@@ -9,6 +9,7 @@ import {
   EmptyState,
   ErrorState,
 } from "@/components/shared/DataStates";
+import { TablePagination } from "@/components/shared/TablePagination";
 import {
   Table,
   TableBody,
@@ -29,6 +30,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Brand {
   id: string;
@@ -37,29 +45,13 @@ interface Brand {
   description: string | null;
 }
 
-/**
- * Normalizes whatever the API returns into a plain array. Tolerates:
- * - a bare array
- * - { data: [...] } (our documented pagination envelope)
- * - anything else -> [] rather than throwing, so the page never crashes
- *   on an unexpected response shape.
- */
-function extractBrandList(payload: unknown): Brand[] {
-  if (Array.isArray(payload)) return payload;
-  if (
-    payload &&
-    typeof payload === "object" &&
-    Array.isArray((payload as any).data)
-  ) {
-    return (payload as any).data;
-  }
-  return [];
-}
-
 export default function BrandsPage() {
   const [brands, setBrands] = useState<Brand[] | null>(null);
+  const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
 
@@ -67,8 +59,17 @@ export default function BrandsPage() {
     setError("");
     setBrands(null);
     try {
-      const res = await api.get("/brands");
-      setBrands(extractBrandList(res.data));
+      const res = await api.get("/brands", {
+        params: {
+          page,
+          limit: 10,
+          search: search || undefined,
+          status: statusFilter === "all" ? undefined : statusFilter,
+        },
+      });
+      // Backend now returns { data: [...], meta: {...} }
+      setBrands(res.data.data.data);
+      setMeta(res.data.data.meta);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -76,14 +77,17 @@ export default function BrandsPage() {
 
   useEffect(() => {
     loadBrands();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, statusFilter]);
 
-  // brands is either null (still loading) or an array (guaranteed by
-  // extractBrandList) — but we guard again here so a future change to
-  // loadBrands can't silently reintroduce the crash.
-  const filtered = Array.isArray(brands)
-    ? brands.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()))
-    : [];
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPage(1);
+      loadBrands();
+    }, 400);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   return (
     <div className="p-8">
@@ -99,20 +103,36 @@ export default function BrandsPage() {
         </Button>
       </div>
 
-      <Input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search brands..."
-        className="max-w-xs mb-4"
-      />
+      <div className="flex gap-3 mb-4">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search brands..."
+          className="max-w-xs"
+        />
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => {
+            setStatusFilter(v);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="true">Active</SelectItem>
+            <SelectItem value="false">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {brands === null && !error && <TableSkeleton />}
       {error && <ErrorState message={error} onRetry={loadBrands} />}
-      {brands !== null && !error && filtered.length === 0 && (
-        <EmptyState title="No brands found" />
-      )}
+      {brands && brands.length === 0 && <EmptyState title="No brands found" />}
 
-      {brands !== null && !error && filtered.length > 0 && (
+      {brands && brands.length > 0 && (
         <div className="border rounded-xl bg-white overflow-hidden">
           <Table>
             <TableHeader>
@@ -124,7 +144,7 @@ export default function BrandsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((brand) => (
+              {brands.map((brand) => (
                 <TableRow key={brand.id}>
                   <TableCell className="font-medium">{brand.name}</TableCell>
                   <TableCell className="text-muted-foreground">
@@ -151,6 +171,11 @@ export default function BrandsPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={meta.page}
+            totalPages={meta.totalPages}
+            onPageChange={setPage}
+          />
         </div>
       )}
 

@@ -40,22 +40,36 @@ export class UserService {
   }
 
   async findAll(query: UserQueryDto) {
-    const users = await this.prisma.user.findMany({
-      where: {
-        roleId: query.roleId || undefined,
-        isActive:
-          query.isActive !== undefined ? query.isActive === 'true' : undefined,
-        ...(query.search && {
-          OR: [
-            { name: { contains: query.search, mode: 'insensitive' } },
-            { email: { contains: query.search, mode: 'insensitive' } },
-          ],
-        }),
-      },
-      include: { role: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    return users.map((u) => this.sanitize(u));
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+
+    const where = {
+      roleId: query.roleId || undefined,
+      isActive:
+        query.isActive !== undefined ? query.isActive === 'true' : undefined,
+      ...(query.search && {
+        OR: [
+          { name: { contains: query.search, mode: 'insensitive' as const } },
+          { email: { contains: query.search, mode: 'insensitive' as const } },
+        ],
+      }),
+    };
+
+    const [total, users] = await this.prisma.$transaction([
+      this.prisma.user.count({ where }),
+      this.prisma.user.findMany({
+        where,
+        include: { role: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      data: users.map((u) => this.sanitize(u)),
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(id: string) {

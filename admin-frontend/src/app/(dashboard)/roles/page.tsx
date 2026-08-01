@@ -1,6 +1,6 @@
 // src/app/(dashboard)/role/page.tsx
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/axios";
 import { getErrorMessage } from "@/lib/apiError";
@@ -35,10 +35,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const PAGE_SIZE = 10;
-
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[] | null>(null);
+  const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -49,8 +48,12 @@ export default function RolesPage() {
     setError("");
     setRoles(null);
     try {
-      const res = await api.get("/roles");
-      setRoles(res.data.data);
+      const res = await api.get("/roles", {
+        params: { page, limit: 10, search: search || undefined },
+      });
+      // Backend now returns { data: [...], meta: {...} }
+      setRoles(res.data.data.data);
+      setMeta(res.data.data.meta);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -58,7 +61,17 @@ export default function RolesPage() {
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPage(1);
+      load();
+    }, 400);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -68,7 +81,6 @@ export default function RolesPage() {
       setDeleteTarget(null);
       load();
     } catch (err) {
-      // Surfaces the "users still assigned" 409 conflict from your backend
       toast({
         variant: "destructive",
         title: "Cannot delete role",
@@ -77,16 +89,6 @@ export default function RolesPage() {
       setDeleteTarget(null);
     }
   }
-
-  const filtered = useMemo(
-    () =>
-      (roles ?? []).filter((r) =>
-        r.name.toLowerCase().includes(search.toLowerCase()),
-      ),
-    [roles, search],
-  );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="p-8">
@@ -98,10 +100,7 @@ export default function RolesPage() {
         <div className="flex items-center gap-2">
           <Input
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search..."
             className="w-56"
           />
@@ -113,9 +112,9 @@ export default function RolesPage() {
 
       {roles === null && !error && <TableSkeleton />}
       {error && <ErrorState message={error} onRetry={load} />}
-      {roles && filtered.length === 0 && <EmptyState title="No roles found" />}
+      {roles && roles.length === 0 && <EmptyState title="No roles found" />}
 
-      {roles && filtered.length > 0 && (
+      {roles && roles.length > 0 && (
         <div className="border rounded-xl overflow-hidden bg-white">
           <Table>
             <TableHeader>
@@ -126,23 +125,27 @@ export default function RolesPage() {
                 <TableHead>ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Users</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pageItems.map((role, i) => (
+              {roles.map((role, i) => (
                 <TableRow key={role.id}>
                   <TableCell>
                     <Checkbox />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {(page - 1) * PAGE_SIZE + i + 1}
+                    {(meta.page - 1) * meta.limit + i + 1}
                   </TableCell>
                   <TableCell className="font-medium">{role.name}</TableCell>
                   <TableCell>
                     <Badge variant={role.status ? "default" : "secondary"}>
                       {role.status ? "Active" : "Inactive"}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {(role as any).userCount ?? 0}
                   </TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button variant="ghost" size="icon" title="View" asChild>
@@ -166,8 +169,8 @@ export default function RolesPage() {
             </TableBody>
           </Table>
           <TablePagination
-            page={page}
-            totalPages={totalPages}
+            page={meta.page}
+            totalPages={meta.totalPages}
             onPageChange={setPage}
           />
         </div>

@@ -1,9 +1,17 @@
 // src/modules/permission/permission.controller.ts
-
 import { PermissionService } from './permission.service';
 import { CreatePermissionGroupDto } from './dto/create-permission-group.dto';
+import { PermissionQueryDto } from './dto/permission-query.dto';
 import { RequirePermission } from '../../common/decorators/permissions.decorator';
-import { Controller, Post, Get, Delete, Param, Body } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Delete,
+  Param,
+  Body,
+  Query,
+} from '@nestjs/common';
 
 @Controller('permissions')
 export class PermissionController {
@@ -15,10 +23,10 @@ export class PermissionController {
     return this.permissionService.createGroupWithPermissions(dto);
   }
 
-  @RequirePermission('permission:read')
+  @RequirePermission('permission:watch')
   @Get('groups')
-  getGroups() {
-    return this.permissionService.getGroupedPermissions();
+  getGroups(@Query() query: PermissionQueryDto) {
+    return this.permissionService.getGroupedPermissions(query);
   }
 
   @RequirePermission('permission:delete')

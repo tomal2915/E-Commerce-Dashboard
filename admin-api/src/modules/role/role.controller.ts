@@ -7,10 +7,12 @@ import {
   Delete,
   Body,
   Param,
+  Query,
 } from '@nestjs/common';
 import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { RoleQueryDto } from './dto/role-query.dto';
 import { RequirePermission } from '../../common/decorators/permissions.decorator';
 
 @Controller('roles')
@@ -23,10 +25,10 @@ export class RoleController {
     return this.roleService.create(dto);
   }
 
-  @RequirePermission('role:read')
+  @RequirePermission('role:watch')
   @Get()
-  findAll() {
-    return this.roleService.findAll();
+  findAll(@Query() query: RoleQueryDto) {
+    return this.roleService.findAll(query);
   }
 
   @RequirePermission('role:read')

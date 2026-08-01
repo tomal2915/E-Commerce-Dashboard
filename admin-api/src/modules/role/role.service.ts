@@ -1,4 +1,5 @@
 // src/modules/role/role.service.ts
+
 import {
   Injectable,
   ConflictException,
@@ -8,6 +9,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { RoleQueryDto } from './dto/role-query.dto';
 
 // The one permission we never let disappear from every single role at once.
 // Without at least one role holding this, nobody could ever fix roles again.
@@ -46,17 +48,35 @@ export class RoleService {
     return this.formatRole(role);
   }
 
-  async findAll() {
-    const roles = await this.prisma.role.findMany({
-      include: {
-        permissions: { include: { permission: true } },
-        _count: { select: { users: true } },
-      },
-    });
-    return roles.map((r) => ({
-      ...this.formatRole(r),
-      userCount: r._count.users,
-    }));
+  async findAll(query: RoleQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+
+    const where = query.search
+      ? { name: { contains: query.search, mode: 'insensitive' as const } }
+      : {};
+
+    const [total, roles] = await this.prisma.$transaction([
+      this.prisma.role.count({ where }),
+      this.prisma.role.findMany({
+        where,
+        include: {
+          permissions: { include: { permission: true } },
+          _count: { select: { users: true } },
+        },
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      data: roles.map((r) => ({
+        ...this.formatRole(r),
+        userCount: r._count.users,
+      })),
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(id: string) {

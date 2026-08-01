@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePermissionGroupDto } from './dto/create-permission-group.dto';
+import { PermissionQueryDto } from './dto/permission-query.dto';
 
 @Injectable()
 export class PermissionService {
@@ -59,15 +60,33 @@ export class PermissionService {
   }
 
   /**
-   * Returns every PermissionGroup with its child Permissions nested inside.
-   * Useful for building a checkbox-tree UI on the frontend when assigning
-   * permissions to a role (grouped by "product", "category", "user", etc).
+   * Returns PermissionGroups (with their child Permissions nested inside),
+   * paginated and optionally filtered by module name — server-side, so the
+   * frontend never fetches everything and slices it in the browser.
    */
-  async getGroupedPermissions() {
-    return this.prisma.permissionGroup.findMany({
-      include: { permissions: true },
-      orderBy: { name: 'asc' },
-    });
+  async getGroupedPermissions(query: PermissionQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+
+    const where = query.search
+      ? { name: { contains: query.search, mode: 'insensitive' as const } }
+      : {};
+
+    const [total, groups] = await this.prisma.$transaction([
+      this.prisma.permissionGroup.count({ where }),
+      this.prisma.permissionGroup.findMany({
+        where,
+        include: { permissions: true },
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      data: groups,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   /**

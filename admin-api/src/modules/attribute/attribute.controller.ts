@@ -24,7 +24,7 @@ export class AttributeController {
     return this.attributeService.create(dto);
   }
 
-  @RequirePermission('attribute:read')
+  @RequirePermission('attribute:watch')
   @Get()
   findAll() {
     return this.attributeService.findAll();

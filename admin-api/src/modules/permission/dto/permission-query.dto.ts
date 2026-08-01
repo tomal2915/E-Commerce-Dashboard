@@ -1,14 +1,8 @@
-// src/modules/brand/dto/brand-query.dto.ts
+// src/modules/permission/dto/permission-query.dto.ts
 import { Type } from 'class-transformer';
-import {
-  IsBooleanString,
-  IsInt,
-  IsOptional,
-  IsString,
-  Min,
-} from 'class-validator';
+import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 
-export class BrandQueryDto {
+export class PermissionQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -24,8 +18,4 @@ export class BrandQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
-
-  @IsOptional()
-  @IsBooleanString()
-  status?: string;
 }

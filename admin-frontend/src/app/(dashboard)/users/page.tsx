@@ -1,6 +1,6 @@
 // src/app/(dashboard)/users/page.tsx
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/axios";
 import { getErrorMessage } from "@/lib/apiError";
 import { useToast } from "@/hooks/use-toast";
@@ -40,8 +40,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const PAGE_SIZE = 10;
-
 interface UserRow {
   id: string;
   name: string;
@@ -58,9 +56,17 @@ interface Role {
 
 export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[] | null>(null);
+  const [meta, setMeta] = useState({
+    total: 0,
+    page: 1,
+    totalPages: 1,
+    limit: 10,
+  });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [roles, setRoles] = useState<Role[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
@@ -70,17 +76,42 @@ export default function UsersPage() {
     setError("");
     setUsers(null);
     try {
-      const res = await api.get("/users");
-      setUsers(res.data.data);
+      const res = await api.get("/users", {
+        params: {
+          page,
+          limit: 10,
+          search: search || undefined,
+          roleId: roleFilter === "all" ? undefined : roleFilter,
+          isActive: statusFilter === "all" ? undefined : statusFilter,
+        },
+      });
+      // Backend now returns { data: [...], meta: {...} }
+      setUsers(res.data.data.data);
+      setMeta(res.data.data.meta);
     } catch (err) {
       setError(getErrorMessage(err));
     }
   }
 
   useEffect(() => {
-    loadUsers();
-    api.get("/roles").then((res) => setRoles(res.data.data));
+    api
+      .get("/roles")
+      .then((res) => setRoles(res.data.data.data ?? res.data.data));
   }, []);
+
+  useEffect(() => {
+    loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, roleFilter, statusFilter]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPage(1);
+      loadUsers();
+    }, 400);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   async function handleToggleActive(user: UserRow) {
     try {
@@ -96,18 +127,6 @@ export default function UsersPage() {
     }
   }
 
-  const filtered = useMemo(
-    () =>
-      (users ?? []).filter(
-        (u) =>
-          u.name.toLowerCase().includes(search.toLowerCase()) ||
-          u.email.toLowerCase().includes(search.toLowerCase()),
-      ),
-    [users, search],
-  );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
   return (
     <div className="p-8">
       <div className="flex justify-between items-start mb-6">
@@ -118,13 +137,45 @@ export default function UsersPage() {
         <div className="flex items-center gap-2">
           <Input
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search..."
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or email..."
             className="w-56"
           />
+          <Select
+            value={roleFilter}
+            onValueChange={(v) => {
+              setRoleFilter(v);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              {roles.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => {
+              setStatusFilter(v);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="true">Active</SelectItem>
+              <SelectItem value="false">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             onClick={() => {
               setEditingUser(null);
@@ -138,9 +189,9 @@ export default function UsersPage() {
 
       {users === null && !error && <TableSkeleton />}
       {error && <ErrorState message={error} onRetry={loadUsers} />}
-      {users && filtered.length === 0 && <EmptyState title="No users found" />}
+      {users && users.length === 0 && <EmptyState title="No users found" />}
 
-      {users && filtered.length > 0 && (
+      {users && users.length > 0 && (
         <div className="border rounded-xl overflow-hidden bg-white">
           <Table>
             <TableHeader>
@@ -159,13 +210,13 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pageItems.map((user, i) => (
+              {users.map((user, i) => (
                 <TableRow key={user.id}>
                   <TableCell>
                     <Checkbox />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {(page - 1) * PAGE_SIZE + i + 1}
+                    {(meta.page - 1) * meta.limit + i + 1}
                   </TableCell>
                   <TableCell className="font-medium">{user.name}</TableCell>
                   <TableCell>
@@ -215,8 +266,8 @@ export default function UsersPage() {
             </TableBody>
           </Table>
           <TablePagination
-            page={page}
-            totalPages={totalPages}
+            page={meta.page}
+            totalPages={meta.totalPages}
             onPageChange={setPage}
           />
         </div>
@@ -250,7 +301,6 @@ function UserFormModal({
   onSaved: () => void;
 }) {
   const { user: currentUser } = useAuth();
-  const { toast } = useToast();
   const isEditing = !!user;
   const isEditingSelf = currentUser?.id === user?.id;
 
@@ -299,7 +349,6 @@ function UserFormModal({
           gender,
         });
       }
-      toast({ title: isEditing ? "User updated" : "User created" });
       onSaved();
     } catch (err) {
       setError(getErrorMessage(err));

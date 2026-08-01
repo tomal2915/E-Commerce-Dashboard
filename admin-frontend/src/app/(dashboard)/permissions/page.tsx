@@ -1,6 +1,6 @@
 // src/app/(dashboard)/permissions/page.tsx
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/axios";
 import { getErrorMessage } from "@/lib/apiError";
@@ -23,10 +23,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const PAGE_SIZE = 10;
-
-// Standard action columns per your spec — union with anything a group has
-// beyond these (e.g. media's "upload"/"write") so the matrix stays complete.
 const BASE_ACTIONS = [
   "create",
   "read",
@@ -50,6 +46,7 @@ function collectAllActions(groups: PermissionGroup[]): string[] {
 
 export default function PermissionsPage() {
   const [groups, setGroups] = useState<PermissionGroup[] | null>(null);
+  const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -58,26 +55,33 @@ export default function PermissionsPage() {
     setError("");
     setGroups(null);
     try {
-      const res = await api.get("/permissions/groups");
-      setGroups(res.data.data);
+      const res = await api.get("/permissions/groups", {
+        params: { page, limit: 10, search: search || undefined },
+      });
+      // Backend now returns { data: [...], meta: {...} }
+      setGroups(res.data.data.data);
+      setMeta(res.data.data.meta);
     } catch (err) {
       setError(getErrorMessage(err));
     }
   }
 
+  // Reload whenever the page changes — always via the API
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
-  const filtered = useMemo(
-    () =>
-      (groups ?? []).filter((g) =>
-        g.name.toLowerCase().includes(search.toLowerCase()),
-      ),
-    [groups, search],
-  );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // Debounce search: reset to page 1 and refetch from the API
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPage(1);
+      load();
+    }, 400);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
   const columns = groups ? collectAllActions(groups) : [];
 
   return (
@@ -92,10 +96,7 @@ export default function PermissionsPage() {
         <div className="flex items-center gap-2">
           <Input
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search..."
             className="w-56"
           />
@@ -107,11 +108,11 @@ export default function PermissionsPage() {
 
       {groups === null && !error && <TableSkeleton />}
       {error && <ErrorState message={error} onRetry={load} />}
-      {groups && filtered.length === 0 && (
+      {groups && groups.length === 0 && (
         <EmptyState title="No permission groups found" />
       )}
 
-      {groups && filtered.length > 0 && (
+      {groups && groups.length > 0 && (
         <div className="border rounded-xl overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table>
@@ -130,7 +131,7 @@ export default function PermissionsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pageItems.map((group) => (
+                {groups.map((group) => (
                   <TableRow key={group.id}>
                     <TableCell>
                       <Checkbox />
@@ -170,8 +171,8 @@ export default function PermissionsPage() {
             </Table>
           </div>
           <TablePagination
-            page={page}
-            totalPages={totalPages}
+            page={meta.page}
+            totalPages={meta.totalPages}
             onPageChange={setPage}
           />
         </div>
