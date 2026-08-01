@@ -2,6 +2,7 @@
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { join } from 'path';
 import { AppModule } from './app.module';
@@ -28,9 +29,6 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // process.cwd() = wherever `npm run start:dev` was executed from
-  // (your project root), regardless of dist/ output structure — more
-  // reliable than __dirname across ts-node watch mode vs. compiled builds.
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
 
   app.useGlobalPipes(
@@ -40,6 +38,30 @@ async function bootstrap() {
       forbidNonWhitelisted: false,
     }),
   );
+
+  // ---- Swagger / OpenAPI documentation ----
+  // Cookie-based auth means Swagger UI's "Authorize" button won't attach
+  // a Bearer token automatically — but every route IS documented here,
+  // and reviewers can still exercise them by logging in through the actual
+  // frontend first (which sets the httpOnly cookies), then hitting these
+  // same endpoints via Postman/curl with the browser's session cookie,
+  // or by using the /auth/login endpoint directly from this page to get
+  // an accessToken back in the response body.
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('E-Commerce Admin API')
+    .setDescription(
+      'REST API for the E-Commerce Admin Dashboard — Auth, Permission, Role, User, Media, Category, Brand, Attribute, and Product modules. Auth uses HttpOnly cookies (access_token + refresh_token); /auth/login also returns the accessToken in the response body for direct API testing.',
+    )
+    .setVersion('1.0')
+    .addCookieAuth('access_token')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'bearer',
+    )
+    .build();
+
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api-docs', app, document);
 
   await app.listen(3000);
 }

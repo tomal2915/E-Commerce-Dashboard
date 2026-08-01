@@ -15,7 +15,9 @@ import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { BrandQueryDto } from './dto/brand-query.dto';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Brands')
 @Controller('brands')
 export class BrandController {
   constructor(private brandService: BrandService) {}

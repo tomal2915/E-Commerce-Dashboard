@@ -20,7 +20,9 @@ import { UpdateMediaDto } from './dto/update-media.dto';
 import { MediaQueryDto } from './dto/media-query.dto';
 import { multerConfig } from './media.multer.config';
 import { RequirePermission } from '../../common/decorators/permissions.decorator';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Media')
 @Controller('media')
 export class MediaController {
   constructor(private mediaService: MediaService) {}

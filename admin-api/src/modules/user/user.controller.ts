@@ -16,7 +16,9 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { UserQueryDto } from './dto/user-query.dto';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Users')
 @Controller('users')
 export class UserController {
   constructor(private userService: UserService) {}

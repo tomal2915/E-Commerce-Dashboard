@@ -12,7 +12,9 @@ import {
   Body,
   Query,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Permissions')
 @Controller('permissions')
 export class PermissionController {
   constructor(private permissionService: PermissionService) {}

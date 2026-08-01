@@ -14,7 +14,9 @@ import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { RoleQueryDto } from './dto/role-query.dto';
 import { RequirePermission } from '../../common/decorators/permissions.decorator';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Roles')
 @Controller('roles')
 export class RoleController {
   constructor(private roleService: RoleService) {}

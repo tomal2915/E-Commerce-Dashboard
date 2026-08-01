@@ -12,6 +12,7 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { Public } from '../../common/decorators/public.decorator';
+import { ApiTags } from '@nestjs/swagger';
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -28,6 +29,7 @@ const ACCESS_COOKIE_OPTIONS = {
   maxAge: 15 * 60 * 1000, // 15 minutes
 };
 
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}

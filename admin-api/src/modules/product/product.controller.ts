@@ -15,7 +15,9 @@ import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { RequirePermission } from '../../common/decorators/permissions.decorator';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Products')
 @Controller('products')
 export class ProductController {
   constructor(private productService: ProductService) {}
